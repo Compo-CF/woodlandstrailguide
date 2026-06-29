@@ -52,12 +52,12 @@ struct ListTabView: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.insetTrailBucketed)
     }
 
-    private struct Group { let title: String; let ways: [TrailGraph.Way] }
+    private struct TrailBucket { let title: String; let ways: [TrailGraph.Way] }
 
-    private func grouped(graph: TrailGraph, query: String) -> [Group] {
+    private func grouped(graph: TrailGraph, query: String) -> [TrailBucket] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let named = graph.ways.filter { $0.name != nil }
         let filtered = q.isEmpty ? named : named.filter {
@@ -72,7 +72,7 @@ struct ListTabView: View {
             buckets[key, default: []].append(w)
         }
         return buckets
-            .map { Group(title: $0.key, ways: $0.value.sorted { ($0.name ?? "") < ($1.name ?? "") }) }
+            .map { TrailBucket(title: $0.key, ways: $0.value.sorted { ($0.name ?? "") < ($1.name ?? "") }) }
             .sorted { $0.title < $1.title }
     }
 }
