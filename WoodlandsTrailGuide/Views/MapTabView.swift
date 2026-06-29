@@ -73,12 +73,12 @@ struct MapTabView: View {
         } label: {
             Image(systemName: routingMode ? "xmark" : "point.topleft.down.to.point.bottomright.curvepath.fill")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(routingMode ? .white : .accentColor)
+                .foregroundStyle(routingMode ? .white : Natural.forest)
                 .frame(width: 44, height: 44)
-                .background(routingMode ? Color.accentColor : Color(.systemBackground),
+                .background(routingMode ? Natural.route : Natural.buttonBg,
                             in: Circle())
-                .overlay(Circle().stroke(Color.black.opacity(0.08), lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                .overlay(Circle().stroke(Natural.hairline, lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
         }
         .accessibilityLabel(routingMode ? "Exit directions" : "Get directions")
     }
@@ -101,11 +101,11 @@ struct MapTabView: View {
                     .textCase(.uppercase)
                     .tracking(0.4)
             }
-            .foregroundStyle(.accent)
+            .foregroundStyle(Natural.forest)
             .frame(width: 44, height: 44)
-            .background(Color(.systemBackground), in: Circle())
-            .overlay(Circle().stroke(Color.black.opacity(0.08), lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+            .background(Natural.buttonBg, in: Circle())
+            .overlay(Circle().stroke(Natural.hairline, lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
         }
         .accessibilityLabel("Map style: \(userData.mapStyle.label). Tap to change.")
     }
@@ -121,10 +121,10 @@ struct MapTabView: View {
                 hintCard
             }
         }
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(Natural.cardBg, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(.black.opacity(0.06), lineWidth: 0.5)
+                .strokeBorder(Natural.hairline, lineWidth: 0.5)
         )
         .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
         .padding(.horizontal, 12)
@@ -135,20 +135,22 @@ struct MapTabView: View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: "hand.tap")
                 .font(.title3)
-                .foregroundStyle(.accent)
+                .foregroundStyle(Natural.forest)
             VStack(alignment: .leading, spacing: 2) {
                 Text(startNode == nil
                      ? "Tap your starting point"
                      : "Tap your destination")
                     .font(.subheadline).fontWeight(.semibold)
+                    .foregroundStyle(Natural.ink)
                 Text(startNode == nil
                      ? "Drop a pin anywhere along a trail."
                      : "We'll route along the pathway network.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(Natural.inkMuted)
             }
             Spacer()
             Button("Cancel") { clearRoute() }
                 .font(.subheadline).fontWeight(.medium)
+                .foregroundStyle(Natural.route)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
@@ -158,15 +160,16 @@ struct MapTabView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(String(format: "%.2f mi", r.lengthMeters / 1609.344))
                     .font(.title3.bold().monospacedDigit())
+                    .foregroundStyle(Natural.ink)
                 Text("• \(walkingTime(meters: r.lengthMeters)) walk")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.subheadline).foregroundStyle(Natural.inkMuted)
                 Spacer()
                 Button {
                     clearRoute()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.title3)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Natural.inkMuted)
                 }
                 .accessibilityLabel("Clear route")
             }
@@ -175,20 +178,21 @@ struct MapTabView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Route")
                         .font(.caption2.smallCaps())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Natural.inkMuted)
                         .tracking(0.6)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(Array(r.namedSegments.enumerated()), id: \.offset) { _, seg in
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(seg.name).font(.caption.weight(.semibold))
+                                        .foregroundStyle(Natural.ink)
                                         .lineLimit(1)
                                     Text(String(format: "%.2f mi", seg.lengthMeters / 1609.344))
                                         .font(.caption2.monospacedDigit())
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(Natural.inkMuted)
                                 }
                                 .padding(.horizontal, 10).padding(.vertical, 6)
-                                .background(Color(.tertiarySystemBackground),
+                                .background(Natural.chipBg,
                                             in: RoundedRectangle(cornerRadius: 8))
                             }
                         }
@@ -200,7 +204,7 @@ struct MapTabView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Parks on this route")
                         .font(.caption2.smallCaps())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Natural.inkMuted)
                         .tracking(0.6)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
@@ -216,7 +220,7 @@ struct MapTabView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Along the way")
                         .font(.caption2.smallCaps())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Natural.inkMuted)
                         .tracking(0.6)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
@@ -280,13 +284,14 @@ private struct ParkChip: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(width: 18, height: 18)
-                .background(Color(red: 0.13, green: 0.55, blue: 0.27), in: Circle())
+                .background(Natural.forest, in: Circle())
             Text(name)
                 .font(.caption.weight(.semibold))
+                .foregroundStyle(Natural.ink)
                 .lineLimit(1)
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(Color(.tertiarySystemBackground),
+        .background(Natural.chipBg,
                     in: RoundedRectangle(cornerRadius: 10))
     }
 }
@@ -313,14 +318,15 @@ private struct POIChip: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(routePOI.poi.name ?? routePOI.category.label)
                     .font(.caption.weight(.semibold))
+                    .foregroundStyle(Natural.ink)
                     .lineLimit(1)
                 Text(String(format: "%.2f mi in", routePOI.distanceAlongRoute / 1609.344))
                     .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Natural.inkMuted)
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(Color(.tertiarySystemBackground),
+        .background(Natural.chipBg,
                     in: RoundedRectangle(cornerRadius: 10))
     }
 }

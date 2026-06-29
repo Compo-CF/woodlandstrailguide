@@ -527,8 +527,9 @@ def main():
         f"{'M' if i == 0 else 'L'} {x:.1f} {y:.1f}"
         for i, (x, y) in enumerate(route_coords_xy)
     )
+    # Softened terracotta — matches Natural.route in the iOS app.
     route_svg = (
-        f'<path d="{route_d}" fill="none" stroke="#FF7D1A" stroke-width="7" '
+        f'<path d="{route_d}" fill="none" stroke="#DF7127" stroke-width="7" '
         f'stroke-linecap="round" stroke-linejoin="round" opacity="0.96"/>'
     )
 

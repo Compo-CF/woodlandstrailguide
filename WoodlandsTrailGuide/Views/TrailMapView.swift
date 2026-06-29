@@ -257,7 +257,7 @@ struct TrailMapView: UIViewRepresentable {
             }
             if overlay is RoutePolyline {
                 let r = MKPolylineRenderer(overlay: overlay)
-                r.strokeColor = UIColor(red: 1.0, green: 0.49, blue: 0.10, alpha: 0.95)
+                r.strokeColor = Natural.routeUI
                 r.lineWidth = 7
                 r.lineCap = .round
                 r.lineJoin = .round
@@ -466,15 +466,15 @@ final class WaypointAnnotationView: MKAnnotationView {
         let size: CGFloat = 28
         frame = CGRect(x: 0, y: 0, width: size, height: size)
         centerOffset = .zero
-        let color: UIColor = kind == .start ? .systemGreen : .systemRed
+        let color: UIColor = kind == .start ? Natural.startPinUI : Natural.endPinUI
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
         image = renderer.image { _ in
             let rect = CGRect(x: 2, y: 2, width: size - 4, height: size - 4)
-            UIColor.white.setFill()
+            Natural.pinRingUI.setFill()
             UIBezierPath(ovalIn: rect.insetBy(dx: -2, dy: -2)).fill()
             color.setFill()
             UIBezierPath(ovalIn: rect).fill()
-            UIColor.white.setFill()
+            Natural.pinRingUI.setFill()
             UIBezierPath(ovalIn: rect.insetBy(dx: 7, dy: 7)).fill()
         }
     }
@@ -508,7 +508,7 @@ final class POIAnnotationView: MKAnnotationView {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
         image = renderer.image { ctx in
             let bg = CGRect(x: 0, y: 0, width: size, height: size)
-            UIColor.white.setFill()
+            Natural.pinRingUI.setFill()
             UIBezierPath(ovalIn: bg).fill()
             tint.setFill()
             UIBezierPath(ovalIn: bg.insetBy(dx: 1.5, dy: 1.5)).fill()
