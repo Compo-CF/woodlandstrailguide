@@ -83,6 +83,48 @@ final class UserDataStore {
         kofiPromptLastShown = .now
         defaults.set(kofiPromptLastShown, forKey: kofiLastShownKey)
     }
+
+    // MARK: - System review prompt eligibility
+
+    /// Cumulative routes the user has successfully walked to completion
+    /// (arrived state hit). Used as one engagement signal for review prompts.
+    var routesCompleted: Int {
+        get { defaults.integer(forKey: routesCompletedKey) }
+        set { defaults.set(newValue, forKey: routesCompletedKey) }
+    }
+    private let routesCompletedKey = "routesCompleted.v1"
+
+    /// When we last asked iOS to consider showing the system review prompt.
+    /// Apple caps the actual presentation at 3/year regardless of how often
+    /// we call requestReview(), but we add a 30-day local cooldown so we
+    /// don't burn a request inside a short engagement window.
+    var lastReviewRequestedAt: Date? {
+        get { defaults.object(forKey: lastReviewRequestKey) as? Date }
+        set { defaults.set(newValue, forKey: lastReviewRequestKey) }
+    }
+    private let lastReviewRequestKey = "lastReviewRequestedAt.v1"
+
+    func markReviewRequested() {
+        lastReviewRequestedAt = .now
+    }
+
+    func markRouteCompleted() {
+        routesCompleted += 1
+    }
+
+    /// True when (a) the user has shown enough engagement to deserve being
+    /// asked, and (b) we haven't asked recently. The actual decision to
+    /// show a prompt still belongs to iOS — this just gates our call to
+    /// requestReview(), so we don't burn cycles on first-launch noise.
+    var eligibleForReviewRequest: Bool {
+        // Never on first launch — Apple may suppress and reduce our quota.
+        guard appLaunches >= 2 else { return false }
+        if let last = lastReviewRequestedAt {
+            let days = Calendar.current.dateComponents([.day], from: last, to: .now).day ?? 0
+            if days < 30 { return false }
+        }
+        return true
+    }
 }
 
 /// Map base-layer style. Mirrors MKMapConfiguration's three concrete subclasses.

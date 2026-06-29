@@ -1,7 +1,9 @@
 import SwiftUI
+import StoreKit
 
 struct ContentView: View {
     @Environment(UserDataStore.self) private var userData
+    @Environment(\.requestReview) private var requestReview
     @State private var showingOnboarding = false
     @State private var showingKofiPrompt = false
     @State private var hasRecordedLaunch = false
@@ -39,14 +41,25 @@ struct ContentView: View {
             userData.recordAppLaunch()
             if !userData.hasSeenOnboarding {
                 showingOnboarding = true
+            } else {
+                considerPostLaunchPrompts()
+            }
+        }
+    }
+
+    /// On a returning user's cold launch, after the UI has settled, either
+    /// ask iOS to consider a review prompt (preferred — system-styled, no
+    /// custom UI to maintain) or show the Ko-fi engagement nudge. Never
+    /// both in the same session; the review request takes priority once
+    /// the user has earned it.
+    private func considerPostLaunchPrompts() {
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            if userData.appLaunches >= 3 && userData.eligibleForReviewRequest {
+                requestReview()
+                userData.markReviewRequested()
             } else if userData.shouldShowKofiPrompt {
-                // Brief delay so the prompt doesn't appear instantly on
-                // cold launch — gives the app a beat to settle before
-                // interrupting the user.
-                Task {
-                    try? await Task.sleep(for: .seconds(1.5))
-                    showingKofiPrompt = true
-                }
+                showingKofiPrompt = true
             }
         }
     }

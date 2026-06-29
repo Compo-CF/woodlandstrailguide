@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import StoreKit
 import UIKit
 
 struct MapTabView: View {
@@ -7,6 +8,7 @@ struct MapTabView: View {
     @Environment(POIStore.self) private var poiStore
     @Environment(LocationManager.self) private var locationManager
     @Environment(UserDataStore.self) private var userData
+    @Environment(\.requestReview) private var requestReview
     @State private var selectedWay: TrailGraph.Way?
 
     @State private var routingMode = false
@@ -65,6 +67,20 @@ struct MapTabView: View {
                 .onChange(of: endNode) { _, _ in updateRoute(graph: graph) }
                 .onChange(of: locationManager.location) { _, _ in
                     updateProgress(graph: graph)
+                }
+                .onChange(of: routeProgress?.isArrived ?? false) { wasArrived, isArrived in
+                    // First time the user actually walks to a destination is
+                    // the best possible moment to ask for a review.
+                    if !wasArrived && isArrived {
+                        userData.markRouteCompleted()
+                        if userData.eligibleForReviewRequest {
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .seconds(3))
+                                requestReview()
+                                userData.markReviewRequested()
+                            }
+                        }
+                    }
                 }
 
                 VStack(spacing: 10) {
