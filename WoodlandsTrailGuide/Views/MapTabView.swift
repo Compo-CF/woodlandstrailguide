@@ -25,6 +25,9 @@ struct MapTabView: View {
     @State private var routeProgress: RouteProgress?
     /// First-time intro sheet explaining the routing flow.
     @State private var showingIntro = false
+    /// Bumped by the recenter button. TrailMapView watches it and snaps the
+    /// map back to the user's location whenever it changes.
+    @State private var recenterTick: Int = 0
 
     /// Google AdMob banner ad unit ID for the map bottom banner.
     /// App-level GADApplicationIdentifier lives in project.yml.
@@ -48,7 +51,8 @@ struct MapTabView: View {
                     pois: poiStore.pois,
                     polygons: poiStore.polygons,
                     mapStyle: userData.mapStyle,
-                    navigationActive: navigationActive
+                    navigationActive: navigationActive,
+                    recenterTick: recenterTick
                 )
                 .ignoresSafeArea(edges: .top)
                 .safeAreaInset(edge: .bottom) {
@@ -66,6 +70,7 @@ struct MapTabView: View {
                 VStack(spacing: 10) {
                     directionsToggle
                     mapStyleToggle
+                    recenterButton
                 }
                 .padding(.top, 12)
                 .padding(.trailing, 12)
@@ -186,10 +191,33 @@ struct MapTabView: View {
         .accessibilityLabel("Map style: \(userData.mapStyle.label). Tap to change.")
     }
 
+    /// Snap the map back to the user's current location. During navigation
+    /// this re-enables follow-with-heading; otherwise plain follow (no
+    /// rotation). The button uses MapKit's standard location glyph so it
+    /// reads as "find me" at a glance.
+    private var recenterButton: some View {
+        Button {
+            recenterTick &+= 1
+        } label: {
+            Image(systemName: "location.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Natural.forest)
+                .frame(width: 44, height: 44)
+                .background(Natural.buttonBg, in: Circle())
+                .overlay(Circle().stroke(Natural.hairline, lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+        }
+        .accessibilityLabel("Recenter on my location")
+    }
+
     // MARK: - Bottom routing card (pre-walk)
 
     @ViewBuilder
     private var routingCard: some View {
+        // Use the loud terracotta background while we're prompting for taps,
+        // and the calm cream once we have a route. That way "the orange card
+        // is asking me to do something" reads at a glance.
+        let asking = route == nil && routingMode
         VStack(spacing: 0) {
             if let r = route {
                 routeSummaryCard(r)
@@ -197,38 +225,56 @@ struct MapTabView: View {
                 hintCard
             }
         }
-        .background(Natural.cardBg, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(
+            asking ? Natural.route : Natural.cardBg,
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Natural.hairline, lineWidth: 0.5)
+                .strokeBorder(asking ? Color.white.opacity(0.22) : Natural.hairline,
+                              lineWidth: asking ? 1 : 0.5)
         )
-        .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+        .shadow(color: .black.opacity(asking ? 0.22 : 0.12), radius: 12, y: 4)
         .padding(.horizontal, 12)
         .padding(.bottom, 14)
     }
 
     private var hintCard: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: "hand.tap")
-                .font(.title3)
-                .foregroundStyle(Natural.forest)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(startNode == nil
-                     ? "Tap your starting point"
-                     : "Tap your destination")
-                    .font(.subheadline).fontWeight(.semibold)
-                    .foregroundStyle(Natural.ink)
-                Text(startNode == nil
+        let isStart = (startNode == nil)
+        return HStack(alignment: .center, spacing: 14) {
+            Image(systemName: "hand.tap.fill")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(Color.white.opacity(0.20), in: Circle())
+            VStack(alignment: .leading, spacing: 3) {
+                Text(isStart ? "Step 1 of 2" : "Step 2 of 2")
+                    .font(.caption2.weight(.heavy))
+                    .tracking(0.9)
+                    .foregroundStyle(.white.opacity(0.78))
+                Text(isStart ? "Tap your starting point" : "Tap your destination")
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(.white)
+                Text(isStart
                      ? "Drop a pin anywhere along a trail."
                      : "We'll route along the pathway network.")
-                    .font(.caption).foregroundStyle(Natural.inkMuted)
+                    .font(.footnote)
+                    .foregroundStyle(.white.opacity(0.88))
             }
-            Spacer()
-            Button("Cancel") { clearRoute() }
-                .font(.subheadline).fontWeight(.medium)
-                .foregroundStyle(Natural.route)
+            Spacer(minLength: 0)
+            Button {
+                clearRoute()
+            } label: {
+                Text("Cancel")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .overlay(
+                        Capsule().stroke(Color.white.opacity(0.7), lineWidth: 1.2)
+                    )
+            }
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .padding(.horizontal, 16).padding(.vertical, 14)
     }
 
     private func routeSummaryCard(_ r: Router.Route) -> some View {

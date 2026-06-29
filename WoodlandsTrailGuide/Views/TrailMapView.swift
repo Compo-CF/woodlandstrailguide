@@ -35,6 +35,10 @@ struct TrailMapView: UIViewRepresentable {
     /// MKMapView's userTrackingMode to .followWithHeading so the map rotates
     /// and pans with the user.
     let navigationActive: Bool
+    /// Incremented by MapTabView's recenter button. When it changes, snap
+    /// the map back to the user's location. Independent of `navigationActive`
+    /// so the button works in both routing and idle modes.
+    let recenterTick: Int
 
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()
@@ -74,6 +78,17 @@ struct TrailMapView: UIViewRepresentable {
                 mapView.camera.altitude = 600
             }
             coord.appliedNavigationActive = navigationActive
+        }
+
+        if coord.appliedRecenterTick != recenterTick {
+            // Don't override .followWithHeading during navigation — just
+            // re-enable plain .follow when the user has pinched away.
+            if !navigationActive {
+                mapView.setUserTrackingMode(.follow, animated: true)
+            } else {
+                mapView.setUserTrackingMode(.followWithHeading, animated: true)
+            }
+            coord.appliedRecenterTick = recenterTick
         }
 
         // ---- Polygons / creek lines (rebuild only when version changes) ----
@@ -237,6 +252,7 @@ struct TrailMapView: UIViewRepresentable {
         var currentAltitude: CLLocationDistance = 4000
         var appliedStyle: MapStyleChoice = .standard
         var appliedNavigationActive: Bool = false
+        var appliedRecenterTick: Int = 0
 
         init(_ parent: TrailMapView) { self.parent = parent }
 
