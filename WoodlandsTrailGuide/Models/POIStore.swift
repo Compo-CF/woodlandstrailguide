@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 import Observation
 
 /// Loads POIs.json + Polygons.json from the bundle on launch, then refreshes
