@@ -40,6 +40,21 @@ open WoodlandsTrailGuide.xcodeproj
 Requires Xcode 15+ and the XcodeGen tool. On MacInCloud, install XcodeGen
 as a standalone binary in `~/bin` per the team setup notes.
 
+### Bumping the build number for TestFlight / App Store uploads
+
+XcodeGen reads `CFBundleVersion` from `project.yml` and overwrites the
+generated `.xcodeproj` on every regen, so any Xcode-side auto-increment
+gets wiped. ASC rejects duplicate build numbers within a version, so
+every upload needs a fresh one. Run this before each archive:
+
+```sh
+python scripts/bump_build.py
+xcodegen generate
+```
+
+Commit the bumped `project.yml` so the history reflects the build that
+got uploaded.
+
 ## Stack
 
 - SwiftUI + MapKit
