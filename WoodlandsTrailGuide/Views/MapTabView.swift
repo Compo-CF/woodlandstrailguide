@@ -62,8 +62,7 @@ struct MapTabView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             } else {
-                ProgressView("Loading trails...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                loadingOrError
             }
         }
         .animation(.easeInOut(duration: 0.22), value: routingMode)
@@ -73,6 +72,47 @@ struct MapTabView: View {
             TrailDetailSheet(way: way)
                 .presentationDetents([.height(220), .medium])
         }
+    }
+
+    // MARK: - Loading / error UI
+
+    /// Shows the spinner for the first few seconds, then either an error card
+    /// (if the store has surfaced one) or a "still loading" panel with a
+    /// Retry button. No more silent infinite spinners.
+    @ViewBuilder
+    private var loadingOrError: some View {
+        VStack(spacing: 16) {
+            if let err = store.loadError {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.largeTitle)
+                    .foregroundStyle(Natural.route)
+                Text("Couldn't load trail data")
+                    .font(.headline)
+                    .foregroundStyle(Natural.ink)
+                Text(err)
+                    .font(.caption.monospaced())
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(Natural.inkMuted)
+                    .padding(.horizontal, 32)
+                Button {
+                    store.loadError = nil
+                    Task { await store.refreshFromRemote() }
+                } label: {
+                    Text("Retry")
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 20).padding(.vertical, 10)
+                        .background(Natural.forest, in: Capsule())
+                        .foregroundStyle(.white)
+                }
+            } else {
+                ProgressView()
+                Text("Loading trails…")
+                    .font(.subheadline)
+                    .foregroundStyle(Natural.inkMuted)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Natural.cardBg.ignoresSafeArea())
     }
 
     // MARK: - Directions toggle
