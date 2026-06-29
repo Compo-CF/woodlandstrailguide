@@ -52,7 +52,7 @@ struct ListTabView: View {
                 }
             }
         }
-        .listStyle(.insetTrailBucketed)
+        .listStyle(.insetGrouped)
     }
 
     private struct TrailBucket { let title: String; let ways: [TrailGraph.Way] }
