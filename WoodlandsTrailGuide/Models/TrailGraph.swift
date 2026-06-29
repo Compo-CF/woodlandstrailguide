@@ -70,7 +70,7 @@ struct TrailGraph: Decodable {
         let parks: [String]?
 
         enum CodingKeys: String, CodingKey {
-            case n, kind = "k", name, lengthMeters = "len_m"
+            case n, kind, name, lengthMeters = "len_m"
             case village, park, system, surface, parks
             case pathwayID = "pathway_id"
         }
