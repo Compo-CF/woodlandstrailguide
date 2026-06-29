@@ -31,6 +31,10 @@ struct TrailMapView: UIViewRepresentable {
     /// our context polygons (parks/lakes) less necessary but still useful
     /// as a transparent overlay for the village outlines.
     let mapStyle: MapStyleChoice
+    /// True while the user is actively walking a computed route. Toggles
+    /// MKMapView's userTrackingMode to .followWithHeading so the map rotates
+    /// and pans with the user.
+    let navigationActive: Bool
 
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()
@@ -61,6 +65,15 @@ struct TrailMapView: UIViewRepresentable {
         if coord.appliedStyle != mapStyle {
             applyConfiguration(mapView, style: mapStyle)
             coord.appliedStyle = mapStyle
+        }
+
+        if coord.appliedNavigationActive != navigationActive {
+            let mode: MKUserTrackingMode = navigationActive ? .followWithHeading : .none
+            mapView.setUserTrackingMode(mode, animated: true)
+            if navigationActive {
+                mapView.camera.altitude = 600
+            }
+            coord.appliedNavigationActive = navigationActive
         }
 
         // ---- Polygons / creek lines (rebuild only when version changes) ----
@@ -223,6 +236,7 @@ struct TrailMapView: UIViewRepresentable {
         var lastPOIVersion = -1
         var currentAltitude: CLLocationDistance = 4000
         var appliedStyle: MapStyleChoice = .standard
+        var appliedNavigationActive: Bool = false
 
         init(_ parent: TrailMapView) { self.parent = parent }
 
@@ -370,6 +384,9 @@ struct TrailMapView: UIViewRepresentable {
 
         @objc func handleTap(_ recognizer: UITapGestureRecognizer) {
             guard let mapView = recognizer.view as? MKMapView else { return }
+            // Suppress all map taps while walking — the route is locked in,
+            // and we don't want to derail the user with stray detail sheets.
+            if parent.navigationActive { return }
             let point = recognizer.location(in: mapView)
             let tapCoord = mapView.convert(point, toCoordinateFrom: mapView)
 

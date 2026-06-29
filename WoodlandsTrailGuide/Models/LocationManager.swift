@@ -11,7 +11,11 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
     override init() {
         super.init()
         manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+        // Best precision available — trail-by-trail navigation needs to know
+        // which side of a pathway intersection the user is on, not just
+        // "somewhere within 10 meters."
+        manager.desiredAccuracy = kCLLocationAccuracyBest
+        manager.distanceFilter = 4  // re-emit roughly every 4 m walked
         authorizationStatus = manager.authorizationStatus
     }
 

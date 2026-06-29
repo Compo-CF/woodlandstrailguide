@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import UIKit
 
 struct MapTabView: View {
     @Environment(TrailStore.self) private var store
@@ -14,13 +15,21 @@ struct MapTabView: View {
     @State private var route: Router.Route?
     @State private var routePOIs: [POIAlongRoute] = []
 
+    /// Set once the user taps "Start" on a computed route. While true:
+    ///   - Map auto-follows the user with heading-up rotation
+    ///   - Bottom card swaps from summary to navigation banner
+    ///   - Idle timer is disabled so the screen stays on
+    ///   - Taps on the map are suppressed (route is locked in)
+    @State private var navigationActive = false
+    /// Live progress along the active route, recomputed on every location fix.
+    @State private var routeProgress: RouteProgress?
+    /// First-time intro sheet explaining the routing flow.
+    @State private var showingIntro = false
+
     /// Google AdMob banner ad unit ID for the map bottom banner.
     /// App-level GADApplicationIdentifier lives in project.yml.
     private let bannerAdUnitID = "ca-app-pub-1927040492403163/1489998026"
 
-    /// Categories deliberately excluded from the "Along the way" surfacing —
-    /// too granular/noisy to call out (you don't need to know about every
-    /// bench you walk past).
     private let alongRouteSkip: Set<String> = [
         "benches", "picnic_tables", "bike_racks", "dog_bag",
         "trail_markers", "monuments", "fountain_feat",
@@ -38,7 +47,8 @@ struct MapTabView: View {
                     routeNodeIndices: route?.nodes,
                     pois: poiStore.pois,
                     polygons: poiStore.polygons,
-                    mapStyle: userData.mapStyle
+                    mapStyle: userData.mapStyle,
+                    navigationActive: navigationActive
                 )
                 .ignoresSafeArea(edges: .top)
                 .safeAreaInset(edge: .bottom) {
@@ -49,6 +59,9 @@ struct MapTabView: View {
                 }
                 .onChange(of: startNode) { _, _ in updateRoute(graph: graph) }
                 .onChange(of: endNode) { _, _ in updateRoute(graph: graph) }
+                .onChange(of: locationManager.location) { _, _ in
+                    updateProgress(graph: graph)
+                }
 
                 VStack(spacing: 10) {
                     directionsToggle
@@ -57,7 +70,10 @@ struct MapTabView: View {
                 .padding(.top, 12)
                 .padding(.trailing, 12)
 
-                if routingMode || route != nil {
+                if navigationActive, let r = route {
+                    VStack { Spacer(); navigationBanner(route: r) }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else if routingMode || route != nil {
                     VStack { Spacer(); routingCard }
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -67,18 +83,27 @@ struct MapTabView: View {
         }
         .animation(.easeInOut(duration: 0.22), value: routingMode)
         .animation(.easeInOut(duration: 0.22), value: route != nil)
+        .animation(.easeInOut(duration: 0.22), value: navigationActive)
         .onAppear { locationManager.requestPermission() }
+        .onChange(of: navigationActive) { _, isOn in
+            // Keep the screen on while walking; restore default on exit.
+            UIApplication.shared.isIdleTimerDisabled = isOn
+        }
         .sheet(item: $selectedWay) { way in
             TrailDetailSheet(way: way)
                 .presentationDetents([.height(220), .medium])
+        }
+        .sheet(isPresented: $showingIntro, onDismiss: {
+            userData.hasSeenRoutingIntro = true
+            routingMode = true  // proceed into routing right after the intro
+        }) {
+            RoutingIntroSheet()
+                .presentationDetents([.medium, .large])
         }
     }
 
     // MARK: - Loading / error UI
 
-    /// Shows the spinner for the first few seconds, then either an error card
-    /// (if the store has surfaced one) or a "still loading" panel with a
-    /// Retry button. No more silent infinite spinners.
     @ViewBuilder
     private var loadingOrError: some View {
         VStack(spacing: 16) {
@@ -115,11 +140,17 @@ struct MapTabView: View {
         .background(Natural.cardBg.ignoresSafeArea())
     }
 
-    // MARK: - Directions toggle
+    // MARK: - Top-right buttons
 
     private var directionsToggle: some View {
         Button {
-            if routingMode { clearRoute() } else { routingMode = true }
+            if routingMode {
+                clearRoute()
+            } else if !userData.hasSeenRoutingIntro {
+                showingIntro = true
+            } else {
+                routingMode = true
+            }
         } label: {
             Image(systemName: routingMode ? "xmark" : "point.topleft.down.to.point.bottomright.curvepath.fill")
                 .font(.system(size: 18, weight: .semibold))
@@ -133,11 +164,6 @@ struct MapTabView: View {
         .accessibilityLabel(routingMode ? "Exit directions" : "Get directions")
     }
 
-    // MARK: - Map style toggle
-
-    /// Cycles through Standard → Hybrid → Satellite and persists the choice.
-    /// The current label sits below the icon so users see what mode they're
-    /// in without having to tap to find out.
     private var mapStyleToggle: some View {
         Button {
             userData.mapStyle = userData.mapStyle.next
@@ -160,7 +186,7 @@ struct MapTabView: View {
         .accessibilityLabel("Map style: \(userData.mapStyle.label). Tap to change.")
     }
 
-    // MARK: - Bottom card
+    // MARK: - Bottom routing card (pre-walk)
 
     @ViewBuilder
     private var routingCard: some View {
@@ -281,16 +307,124 @@ struct MapTabView: View {
                     }
                 }
             }
+
+            // Start button — flips into navigation mode.
+            Button {
+                startNavigation(graph: store.graph!)
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "figure.walk")
+                        .font(.subheadline.weight(.bold))
+                    Text("Start walking")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Natural.forest, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .padding(.top, 4)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
 
-    // MARK: - Routing
+    // MARK: - Navigation banner (during walking)
+
+    private func navigationBanner(route r: Router.Route) -> some View {
+        let progress = routeProgress
+        let upcoming = progress?.upcomingInstruction ?? r.turnInstructions.first
+        let isArrived = progress?.isArrived ?? false
+        let remaining = progress?.remainingMeters ?? r.lengthMeters
+        let distanceToNext = progress?.distanceToNext ?? r.turnInstructions.first?.legMeters ?? 0
+        let offRoute = (progress?.distanceFromRoute ?? 0) > 30
+
+        return VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: isArrived ? "checkmark.circle.fill" : (upcoming?.kind.icon ?? "arrow.up"))
+                    .font(.system(size: 32, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 60, height: 60)
+                    .background(isArrived ? Natural.forest : Natural.route, in: Circle())
+
+                VStack(alignment: .leading, spacing: 4) {
+                    if isArrived {
+                        Text("You've arrived")
+                            .font(.headline)
+                            .foregroundStyle(Natural.ink)
+                        Text("End of the route.")
+                            .font(.caption)
+                            .foregroundStyle(Natural.inkMuted)
+                    } else if let u = upcoming {
+                        Text(u.kind.verb)
+                            .font(.headline)
+                            .foregroundStyle(Natural.ink)
+                        if let name = u.streetName {
+                            Text("\(u.kind == .arrive ? "at" : "onto") \(name)")
+                                .font(.subheadline)
+                                .foregroundStyle(Natural.ink)
+                                .lineLimit(1)
+                        }
+                        Text("in \(distanceText(meters: distanceToNext))")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(Natural.inkMuted)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+
+            Divider()
+                .background(Natural.hairline)
+                .padding(.top, 12)
+                .padding(.bottom, 10)
+
+            HStack(spacing: 6) {
+                Text(String(format: "%.2f mi", remaining / 1609.344))
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(Natural.ink)
+                Text("· \(walkingTime(meters: remaining)) remaining")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(Natural.inkMuted)
+                Spacer()
+                Button {
+                    clearRoute()
+                } label: {
+                    Text("End")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(Natural.route, in: Capsule())
+                }
+            }
+
+            if offRoute {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption.weight(.semibold))
+                    Text("Off route by \(distanceText(meters: progress?.distanceFromRoute ?? 0))")
+                        .font(.caption.weight(.medium))
+                }
+                .foregroundStyle(Natural.route)
+                .padding(.top, 8)
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 14)
+        .background(Natural.cardBg, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(Natural.hairline, lineWidth: 0.5)
+        )
+        .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 14)
+    }
+
+    // MARK: - Routing logic
 
     private func updateRoute(graph: TrailGraph) {
         guard let s = startNode, let e = endNode else {
             route = nil
             routePOIs = []
+            routeProgress = nil
             return
         }
         let r = Router(graph: graph).route(from: s, to: e)
@@ -307,12 +441,32 @@ struct MapTabView: View {
         }
     }
 
+    private func updateProgress(graph: TrailGraph) {
+        guard navigationActive,
+              let r = route,
+              let loc = locationManager.location else {
+            return
+        }
+        routeProgress = Router(graph: graph).progress(along: r, at: loc)
+    }
+
+    private func startNavigation(graph: TrailGraph) {
+        navigationActive = true
+        // Compute initial progress so the banner shows real numbers from the
+        // first frame instead of placeholder values pulled from the route.
+        if let loc = locationManager.location, let r = route {
+            routeProgress = Router(graph: graph).progress(along: r, at: loc)
+        }
+    }
+
     private func clearRoute() {
         routingMode = false
+        navigationActive = false
         startNode = nil
         endNode = nil
         route = nil
         routePOIs = []
+        routeProgress = nil
     }
 
     private func walkingTime(meters: Double) -> String {
@@ -322,6 +476,16 @@ struct MapTabView: View {
         let h = Int(minutes) / 60
         let m = Int(minutes) % 60
         return m == 0 ? "\(h) hr" : "\(h) hr \(m) min"
+    }
+
+    /// "0.12 mi" for ≥0.1 mi, "320 ft" below that. Walking-friendly units.
+    private func distanceText(meters: Double) -> String {
+        let miles = meters / 1609.344
+        if miles >= 0.1 {
+            return String(format: "%.2f mi", miles)
+        }
+        let feet = meters * 3.28084
+        return "\(Int(feet.rounded())) ft"
     }
 }
 
@@ -346,8 +510,7 @@ private struct ParkChip: View {
     }
 }
 
-/// A pill showing a POI you'll pass on the route. Carries the category icon
-/// and tint so the strip reads at a glance ("bridge, playground, restroom").
+/// A pill showing a POI you'll pass on the route.
 private struct POIChip: View {
     let routePOI: POIAlongRoute
 

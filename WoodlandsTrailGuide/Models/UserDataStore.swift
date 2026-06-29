@@ -35,6 +35,13 @@ final class UserDataStore {
         set { defaults.set(newValue, forKey: onboardingKey) }
     }
 
+    /// One-time intro shown the first time the directions button is tapped.
+    private let routingIntroKey = "hasSeenRoutingIntro.v1"
+    var hasSeenRoutingIntro: Bool {
+        get { defaults.bool(forKey: routingIntroKey) }
+        set { defaults.set(newValue, forKey: routingIntroKey) }
+    }
+
     func recordAppLaunch() {
         appLaunches += 1
         defaults.set(appLaunches, forKey: appLaunchesKey)
