@@ -30,22 +30,22 @@ struct RoutingIntroSheet: View {
                 StepRow(
                     number: 1,
                     title: "Tap a starting point",
-                    body: "Anywhere along a trail. A green pin drops where you tapped."
+                    detail: "Anywhere along a trail. A green pin drops where you tapped."
                 )
                 StepRow(
                     number: 2,
                     title: "Tap your destination",
-                    body: "A red pin drops, and the app routes the shortest path between the two."
+                    detail: "A red pin drops, and the app routes the shortest path between the two."
                 )
                 StepRow(
                     number: 3,
                     title: "Review what's ahead",
-                    body: "Total distance, walking time, the pathways you'll follow, the parks you'll pass through, and amenities along the way."
+                    detail: "Total distance, walking time, the pathways you'll follow, the parks you'll pass through, and amenities along the way."
                 )
                 StepRow(
                     number: 4,
                     title: "Tap Start when you're ready",
-                    body: "Your phone keeps the screen on, follows your location, and tells you what comes next."
+                    detail: "Your phone keeps the screen on, follows your location, and tells you what comes next."
                 )
             }
             .padding(.horizontal, 24)
@@ -73,7 +73,7 @@ struct RoutingIntroSheet: View {
 private struct StepRow: View {
     let number: Int
     let title: String
-    let body: String
+    let detail: String
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
@@ -86,7 +86,7 @@ private struct StepRow: View {
                 Text(title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Natural.ink)
-                Text(body)
+                Text(detail)
                     .font(.footnote)
                     .foregroundStyle(Natural.inkMuted)
                     .fixedSize(horizontal: false, vertical: true)
