@@ -14,13 +14,9 @@ struct MapTabView: View {
     @State private var route: Router.Route?
     @State private var routePOIs: [POIAlongRoute] = []
 
-    /// Google AdMob banner ad unit ID. Currently set to Google's official
-    /// TEST banner unit (https://developers.google.com/admob/ios/test-ads),
-    /// which is safe to ship on TestFlight and shows clearly-labeled test
-    /// ads. Swap to the real ad unit ID after registering this app in the
-    /// AdMob console; the app-level GADApplicationIdentifier lives in
-    /// project.yml.
-    private let bannerAdUnitID = "ca-app-pub-3940256099942544/2934735716"
+    /// Google AdMob banner ad unit ID for the map bottom banner.
+    /// App-level GADApplicationIdentifier lives in project.yml.
+    private let bannerAdUnitID = "ca-app-pub-1927040492403163/1489998026"
 
     /// Categories deliberately excluded from the "Along the way" surfacing —
     /// too granular/noisy to call out (you don't need to know about every

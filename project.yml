@@ -51,12 +51,9 @@ targets:
         UIRequiredDeviceCapabilities:
           - armv7
         ITSAppUsesNonExemptEncryption: false
-        # Google AdMob — app-level App ID. Currently set to Google's official
-        # TEST App ID (https://developers.google.com/admob/ios/test-ads), which
-        # shows clearly-labeled test ads and is safe to ship to TestFlight.
-        # Swap in the real GADApplicationIdentifier after registering this app
-        # in the AdMob console; banner ad unit ID lives in MapTabView.swift.
-        GADApplicationIdentifier: ca-app-pub-3940256099942544~1458002511
+        # Google AdMob — app-level App ID for Woodlands Trail Guide.
+        # Banner ad unit ID lives in MapTabView.swift.
+        GADApplicationIdentifier: ca-app-pub-1927040492403163~2388146729
         # SKAdNetwork identifiers — Apple's privacy-preserving ad attribution.
         # List sourced from Google AdMob's recommended set, matched verbatim
         # to the WoodlandsFishing target.
