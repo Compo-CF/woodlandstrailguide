@@ -23,6 +23,19 @@ struct TrailDetailSheet: View {
                         if let s = way.system { LabeledContent("System", value: s) }
                     }
                 }
+                if let parks = way.parks, !parks.isEmpty {
+                    Section("Connects to") {
+                        ForEach(parks, id: \.self) { park in
+                            HStack(spacing: 10) {
+                                Image(systemName: "tree.fill")
+                                    .foregroundStyle(Color(red: 0.13, green: 0.55, blue: 0.27))
+                                    .frame(width: 18)
+                                Text(park)
+                                Spacer()
+                            }
+                        }
+                    }
+                }
                 if let pid = way.pathwayID {
                     Section("Township reference") {
                         Text(pid).font(.system(.body, design: .monospaced))

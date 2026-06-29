@@ -21,9 +21,11 @@ struct Router {
         let lengthMeters: Double
         /// Human-readable segments along the route: each is a (name, length)
         /// run of consecutive edges that share the same trail/pathway name.
-        /// Use this to generate turn-by-turn-ish text like
-        ///   "0.3mi on Sawmill Path"  → "0.1mi on Hidden Bridge"
         let namedSegments: [(name: String, lengthMeters: Double)]
+        /// Unique named parks the route passes through, in first-encountered
+        /// order. Sourced from each way's `parks` field (precomputed by
+        /// link_trails_to_parks.py).
+        let parks: [String]
     }
 
     /// Find the nearest node in the graph to an arbitrary point. Linear scan —
@@ -53,7 +55,7 @@ struct Router {
         let n = graph.nodes.count
         guard start >= 0, start < n, end >= 0, end < n else { return nil }
         if start == end {
-            return Route(nodes: [start], lengthMeters: 0, namedSegments: [])
+            return Route(nodes: [start], lengthMeters: 0, namedSegments: [], parks: [])
         }
 
         var dist = [Double](repeating: .infinity, count: n)
@@ -95,8 +97,25 @@ struct Router {
         return Route(
             nodes: path,
             lengthMeters: dist[end],
-            namedSegments: collapseSegments(edgeWays: edgeWays, path: path)
+            namedSegments: collapseSegments(edgeWays: edgeWays, path: path),
+            parks: uniqueParks(edgeWays: edgeWays)
         )
+    }
+
+    /// Distinct parks the route passes through, ordered by first appearance
+    /// along the route — so "Bear Branch Park, Shadowbend Park" reads
+    /// chronologically.
+    private func uniqueParks(edgeWays: [Int]) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for wi in edgeWays {
+            guard let parks = graph.ways[wi].parks else { continue }
+            for p in parks where !seen.contains(p) {
+                seen.insert(p)
+                out.append(p)
+            }
+        }
+        return out
     }
 
     /// Walk the edges in order and group consecutive edges that belong to ways

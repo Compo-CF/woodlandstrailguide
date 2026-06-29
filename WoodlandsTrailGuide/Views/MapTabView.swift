@@ -5,6 +5,7 @@ struct MapTabView: View {
     @Environment(TrailStore.self) private var store
     @Environment(POIStore.self) private var poiStore
     @Environment(LocationManager.self) private var locationManager
+    @Environment(UserDataStore.self) private var userData
     @State private var selectedWay: TrailGraph.Way?
 
     @State private var routingMode = false
@@ -32,15 +33,19 @@ struct MapTabView: View {
                     endNode: $endNode,
                     routeNodeIndices: route?.nodes,
                     pois: poiStore.pois,
-                    polygons: poiStore.polygons
+                    polygons: poiStore.polygons,
+                    mapStyle: userData.mapStyle
                 )
                 .ignoresSafeArea(edges: .top)
                 .onChange(of: startNode) { _, _ in updateRoute(graph: graph) }
                 .onChange(of: endNode) { _, _ in updateRoute(graph: graph) }
 
-                directionsToggle
-                    .padding(.top, 12)
-                    .padding(.trailing, 12)
+                VStack(spacing: 10) {
+                    directionsToggle
+                    mapStyleToggle
+                }
+                .padding(.top, 12)
+                .padding(.trailing, 12)
 
                 if routingMode || route != nil {
                     VStack { Spacer(); routingCard }
@@ -76,6 +81,33 @@ struct MapTabView: View {
                 .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
         }
         .accessibilityLabel(routingMode ? "Exit directions" : "Get directions")
+    }
+
+    // MARK: - Map style toggle
+
+    /// Cycles through Standard → Hybrid → Satellite and persists the choice.
+    /// The current label sits below the icon so users see what mode they're
+    /// in without having to tap to find out.
+    private var mapStyleToggle: some View {
+        Button {
+            userData.mapStyle = userData.mapStyle.next
+            userData.saveMapStyle()
+        } label: {
+            VStack(spacing: 1) {
+                Image(systemName: userData.mapStyle.systemImage)
+                    .font(.system(size: 17, weight: .semibold))
+                Text(userData.mapStyle.label)
+                    .font(.system(size: 8, weight: .semibold))
+                    .textCase(.uppercase)
+                    .tracking(0.4)
+            }
+            .foregroundStyle(.accent)
+            .frame(width: 44, height: 44)
+            .background(Color(.systemBackground), in: Circle())
+            .overlay(Circle().stroke(Color.black.opacity(0.08), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+        }
+        .accessibilityLabel("Map style: \(userData.mapStyle.label). Tap to change.")
     }
 
     // MARK: - Bottom card
@@ -164,6 +196,22 @@ struct MapTabView: View {
                 }
             }
 
+            if !r.parks.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Parks on this route")
+                        .font(.caption2.smallCaps())
+                        .foregroundStyle(.secondary)
+                        .tracking(0.6)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(r.parks, id: \.self) { park in
+                                ParkChip(name: park)
+                            }
+                        }
+                    }
+                }
+            }
+
             if !routePOIs.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Along the way")
@@ -220,6 +268,26 @@ struct MapTabView: View {
         let h = Int(minutes) / 60
         let m = Int(minutes) % 60
         return m == 0 ? "\(h) hr" : "\(h) hr \(m) min"
+    }
+}
+
+/// A pill showing one named park the route passes through.
+private struct ParkChip: View {
+    let name: String
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "tree.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 18, height: 18)
+                .background(Color(red: 0.13, green: 0.55, blue: 0.27), in: Circle())
+            Text(name)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(Color(.tertiarySystemBackground),
+                    in: RoundedRectangle(cornerRadius: 10))
     }
 }
 

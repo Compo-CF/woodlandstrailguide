@@ -64,10 +64,14 @@ struct TrailGraph: Decodable {
         let surface: String?
         /// Township pathway id for joining back to the source layer.
         let pathwayID: String?
+        /// Named parks this way's geometry passes through, computed at build
+        /// time by link_trails_to_parks.py via point-in-polygon. Most-
+        /// overlapping park is first.
+        let parks: [String]?
 
         enum CodingKeys: String, CodingKey {
             case n, kind = "k", name, lengthMeters = "len_m"
-            case village, park, system, surface
+            case village, park, system, surface, parks
             case pathwayID = "pathway_id"
         }
 
@@ -82,6 +86,7 @@ struct TrailGraph: Decodable {
             system = try c.decodeIfPresent(String.self, forKey: .system)
             surface = try c.decodeIfPresent(String.self, forKey: .surface)
             pathwayID = try c.decodeIfPresent(String.self, forKey: .pathwayID)
+            parks = try c.decodeIfPresent([String].self, forKey: .parks)
         }
     }
 

@@ -571,6 +571,16 @@ def main():
     start_village = ways[edge_ways[0]].get("village") if edge_ways else None
     end_village = ways[edge_ways[-1]].get("village") if edge_ways else None
 
+    # Parks the route passes through, in first-encounter order. Mirrors
+    # Router.swift's uniqueParks helper.
+    route_parks = []
+    seen_parks = set()
+    for wi in edge_ways:
+        for p in (ways[wi].get("parks") or []):
+            if p not in seen_parks:
+                seen_parks.add(p)
+                route_parks.append(p)
+
     out = {
         "polygon_svg": polygon_svg,
         "line_svg": line_svg,
@@ -604,12 +614,14 @@ def main():
         "end_label": end_name,
         "start_village": start_village,
         "end_village": end_village,
+        "route_parks": route_parks,
         "poi_count_on_map": poi_count,
         "poi_count_along_route": len(along_route),
     }
     OUT_PATH.write_text(json.dumps(out, indent=2), encoding="utf-8")
     print(f"Wrote {OUT_PATH}")
     print(f"  Route:        {miles:.2f} mi over {len(edge_ways)} edges, {len(segments)} named segments")
+    print(f"  Parks:        {len(route_parks)}  {route_parks[:5]}")
     print(f"  POIs on map:  {poi_count}")
     print(f"  POIs along:   {len(along_route)}  (showing first 24 in chips)")
     print(f"  Polygon SVG length: {len(polygon_svg)}")

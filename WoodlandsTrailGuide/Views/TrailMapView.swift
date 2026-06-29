@@ -26,6 +26,11 @@ struct TrailMapView: UIViewRepresentable {
 
     let pois: POICatalog?
     let polygons: PolygonCatalog?
+    /// Base layer style (.standard / .hybrid / .satellite). The hybrid and
+    /// satellite styles swap MapKit's base for Apple's imagery, which makes
+    /// our context polygons (parks/lakes) less necessary but still useful
+    /// as a transparent overlay for the village outlines.
+    let mapStyle: MapStyleChoice
 
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()
@@ -35,6 +40,7 @@ struct TrailMapView: UIViewRepresentable {
         mapView.showsScale = true
         // Hide MapKit's own POIs — we render our own from Township data.
         mapView.pointOfInterestFilter = .excludingAll
+        applyConfiguration(mapView, style: mapStyle)
 
         let tap = UITapGestureRecognizer(target: context.coordinator,
                                          action: #selector(Coordinator.handleTap(_:)))
@@ -51,6 +57,11 @@ struct TrailMapView: UIViewRepresentable {
     func updateUIView(_ mapView: MKMapView, context: Context) {
         let coord = context.coordinator
         coord.parent = self
+
+        if coord.appliedStyle != mapStyle {
+            applyConfiguration(mapView, style: mapStyle)
+            coord.appliedStyle = mapStyle
+        }
 
         // ---- Polygons / creek lines (rebuild only when version changes) ----
         let polyVersion = polygons?.version ?? 0
@@ -173,6 +184,29 @@ struct TrailMapView: UIViewRepresentable {
         return line
     }
 
+    /// Swap the map's base configuration to match the user's style choice.
+    /// iOS 16+: MKMapConfiguration with three concrete subclasses. We use
+    /// `.realistic` elevation everywhere for hillshading.
+    private func applyConfiguration(_ mapView: MKMapView, style: MapStyleChoice) {
+        let config: MKMapConfiguration
+        switch style {
+        case .standard:
+            let c = MKStandardMapConfiguration(elevationStyle: .realistic,
+                                               emphasisStyle: .default)
+            c.pointOfInterestFilter = .excludingAll
+            c.showsTraffic = false
+            config = c
+        case .hybrid:
+            let c = MKHybridMapConfiguration(elevationStyle: .realistic)
+            c.pointOfInterestFilter = .excludingAll
+            c.showsTraffic = false
+            config = c
+        case .satellite:
+            config = MKImageryMapConfiguration(elevationStyle: .realistic)
+        }
+        mapView.preferredConfiguration = config
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     final class Coordinator: NSObject, MKMapViewDelegate, UIGestureRecognizerDelegate {
@@ -188,6 +222,7 @@ struct TrailMapView: UIViewRepresentable {
         var allPOIAnnotations: [POIAnnotation] = []
         var lastPOIVersion = -1
         var currentAltitude: CLLocationDistance = 4000
+        var appliedStyle: MapStyleChoice = .standard
 
         init(_ parent: TrailMapView) { self.parent = parent }
 
