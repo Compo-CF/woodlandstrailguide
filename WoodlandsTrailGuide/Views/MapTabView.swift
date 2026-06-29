@@ -14,6 +14,14 @@ struct MapTabView: View {
     @State private var route: Router.Route?
     @State private var routePOIs: [POIAlongRoute] = []
 
+    /// Google AdMob banner ad unit ID. Currently set to Google's official
+    /// TEST banner unit (https://developers.google.com/admob/ios/test-ads),
+    /// which is safe to ship on TestFlight and shows clearly-labeled test
+    /// ads. Swap to the real ad unit ID after registering this app in the
+    /// AdMob console; the app-level GADApplicationIdentifier lives in
+    /// project.yml.
+    private let bannerAdUnitID = "ca-app-pub-3940256099942544/2934735716"
+
     /// Categories deliberately excluded from the "Along the way" surfacing —
     /// too granular/noisy to call out (you don't need to know about every
     /// bench you walk past).
@@ -37,6 +45,12 @@ struct MapTabView: View {
                     mapStyle: userData.mapStyle
                 )
                 .ignoresSafeArea(edges: .top)
+                .safeAreaInset(edge: .bottom) {
+                    BannerAdView(adUnitID: bannerAdUnitID)
+                        .frame(height: 50)
+                        .frame(maxWidth: .infinity)
+                        .background(Natural.cardBg)
+                }
                 .onChange(of: startNode) { _, _ in updateRoute(graph: graph) }
                 .onChange(of: endNode) { _, _ in updateRoute(graph: graph) }
 

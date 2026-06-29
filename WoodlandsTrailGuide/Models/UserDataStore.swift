@@ -1,19 +1,21 @@
 import Foundation
 import Observation
 
-/// User-specific per-device state: onboarding flag, launch counter, map style.
-/// Persisted to UserDefaults — no backend, no account.
+/// User-specific per-device state: onboarding flag, launch counter, map style,
+/// Ko-fi prompt cooldown. Persisted to UserDefaults — no backend, no account.
 @Observable
 final class UserDataStore {
     var favoriteWayIDs: Set<String> = []
     var appLaunches: Int = 0
     var mapStyle: MapStyleChoice = .standard
+    var kofiPromptLastShown: Date?
 
     private let defaults = UserDefaults.standard
     private let favoritesKey = "favorites.v1"
     private let onboardingKey = "hasSeenOnboarding.v1"
     private let appLaunchesKey = "appLaunches.v1"
     private let mapStyleKey = "mapStyle.v1"
+    private let kofiLastShownKey = "kofiPromptLastShown.v1"
 
     init() {
         if let data = defaults.data(forKey: favoritesKey),
@@ -25,6 +27,7 @@ final class UserDataStore {
            let parsed = MapStyleChoice(rawValue: raw) {
             mapStyle = parsed
         }
+        kofiPromptLastShown = defaults.object(forKey: kofiLastShownKey) as? Date
     }
 
     var hasSeenOnboarding: Bool {
@@ -50,9 +53,28 @@ final class UserDataStore {
         }
     }
 
-    /// Persist `mapStyle` whenever it changes. Call from views that update it.
     func saveMapStyle() {
         defaults.set(mapStyle.rawValue, forKey: mapStyleKey)
+    }
+
+    // MARK: - Ko-fi support nudge
+
+    /// Whether the Ko-fi support prompt is eligible to show on this launch.
+    /// Requires the user to be engaged (10+ launches OR 3+ favorites saved)
+    /// AND at least 45 days since the last time it was shown. Mirrors the
+    /// WoodlandsFishing engagement rule so the prompt feels earned, not pushy.
+    var shouldShowKofiPrompt: Bool {
+        guard appLaunches >= 10 || favoriteWayIDs.count >= 3 else { return false }
+        if let last = kofiPromptLastShown {
+            let daysSince = Calendar.current.dateComponents([.day], from: last, to: .now).day ?? 0
+            return daysSince >= 45
+        }
+        return true
+    }
+
+    func markKofiPromptShown() {
+        kofiPromptLastShown = .now
+        defaults.set(kofiPromptLastShown, forKey: kofiLastShownKey)
     }
 }
 
