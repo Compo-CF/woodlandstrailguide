@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct WoodlandsTrailGuideApp: App {
     @State private var store = TrailStore()
+    @State private var poiStore = POIStore()
     @State private var locationManager = LocationManager()
     @State private var userData = UserDataStore()
 
@@ -10,6 +11,7 @@ struct WoodlandsTrailGuideApp: App {
         WindowGroup {
             ContentView()
                 .environment(store)
+                .environment(poiStore)
                 .environment(locationManager)
                 .environment(userData)
                 .onChange(of: locationManager.location) { _, newValue in

@@ -3,14 +3,23 @@ import MapKit
 
 struct MapTabView: View {
     @Environment(TrailStore.self) private var store
+    @Environment(POIStore.self) private var poiStore
     @Environment(LocationManager.self) private var locationManager
     @State private var selectedWay: TrailGraph.Way?
 
-    // Routing state — lives here so the map view stays thin.
     @State private var routingMode = false
     @State private var startNode: Int?
     @State private var endNode: Int?
     @State private var route: Router.Route?
+    @State private var routePOIs: [POIAlongRoute] = []
+
+    /// Categories deliberately excluded from the "Along the way" surfacing —
+    /// too granular/noisy to call out (you don't need to know about every
+    /// bench you walk past).
+    private let alongRouteSkip: Set<String> = [
+        "benches", "picnic_tables", "bike_racks", "dog_bag",
+        "trail_markers", "monuments", "fountain_feat",
+    ]
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -21,11 +30,13 @@ struct MapTabView: View {
                     routingMode: routingMode,
                     startNode: $startNode,
                     endNode: $endNode,
-                    routeNodeIndices: route?.nodes
+                    routeNodeIndices: route?.nodes,
+                    pois: poiStore.pois,
+                    polygons: poiStore.polygons
                 )
                 .ignoresSafeArea(edges: .top)
-                .onChange(of: startNode) { _, _ in computeRoute(graph: graph) }
-                .onChange(of: endNode) { _, _ in computeRoute(graph: graph) }
+                .onChange(of: startNode) { _, _ in updateRoute(graph: graph) }
+                .onChange(of: endNode) { _, _ in updateRoute(graph: graph) }
 
                 directionsToggle
                     .padding(.top, 12)
@@ -53,11 +64,7 @@ struct MapTabView: View {
 
     private var directionsToggle: some View {
         Button {
-            if routingMode {
-                clearRoute()
-            } else {
-                routingMode = true
-            }
+            if routingMode { clearRoute() } else { routingMode = true }
         } label: {
             Image(systemName: routingMode ? "xmark" : "point.topleft.down.to.point.bottomright.curvepath.fill")
                 .font(.system(size: 18, weight: .semibold))
@@ -115,7 +122,7 @@ struct MapTabView: View {
     }
 
     private func routeSummaryCard(_ r: Router.Route) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Text(String(format: "%.2f mi", r.lengthMeters / 1609.344))
                     .font(.title3.bold().monospacedDigit())
@@ -131,20 +138,43 @@ struct MapTabView: View {
                 }
                 .accessibilityLabel("Clear route")
             }
+
             if !r.namedSegments.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(Array(r.namedSegments.enumerated()), id: \.offset) { _, seg in
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(seg.name).font(.caption.weight(.semibold))
-                                    .lineLimit(1)
-                                Text(String(format: "%.2f mi", seg.lengthMeters / 1609.344))
-                                    .font(.caption2.monospacedDigit())
-                                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Route")
+                        .font(.caption2.smallCaps())
+                        .foregroundStyle(.secondary)
+                        .tracking(0.6)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Array(r.namedSegments.enumerated()), id: \.offset) { _, seg in
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(seg.name).font(.caption.weight(.semibold))
+                                        .lineLimit(1)
+                                    Text(String(format: "%.2f mi", seg.lengthMeters / 1609.344))
+                                        .font(.caption2.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .background(Color(.tertiarySystemBackground),
+                                            in: RoundedRectangle(cornerRadius: 8))
                             }
-                            .padding(.horizontal, 10).padding(.vertical, 6)
-                            .background(Color(.tertiarySystemBackground),
-                                        in: RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                }
+            }
+
+            if !routePOIs.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Along the way")
+                        .font(.caption2.smallCaps())
+                        .foregroundStyle(.secondary)
+                        .tracking(0.6)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(routePOIs.prefix(20)) { rp in
+                                POIChip(routePOI: rp)
+                            }
                         }
                     }
                 }
@@ -155,13 +185,24 @@ struct MapTabView: View {
 
     // MARK: - Routing
 
-    private func computeRoute(graph: TrailGraph) {
+    private func updateRoute(graph: TrailGraph) {
         guard let s = startNode, let e = endNode else {
             route = nil
+            routePOIs = []
             return
         }
         let r = Router(graph: graph).route(from: s, to: e)
         route = r
+        if let r, let catalog = poiStore.pois {
+            let coords = r.nodes.map { graph.nodes[$0].clCoord }
+            routePOIs = catalog.poisAlong(
+                nodes: coords,
+                within: 40,
+                excludingKeys: alongRouteSkip
+            )
+        } else {
+            routePOIs = []
+        }
     }
 
     private func clearRoute() {
@@ -169,9 +210,9 @@ struct MapTabView: View {
         startNode = nil
         endNode = nil
         route = nil
+        routePOIs = []
     }
 
-    /// Rough walking-time estimate at ~3 mph (typical relaxed pace on a path).
     private func walkingTime(meters: Double) -> String {
         let minutes = meters / 1609.344 / 3.0 * 60.0
         if minutes < 1 { return "<1 min" }
@@ -182,9 +223,41 @@ struct MapTabView: View {
     }
 }
 
+/// A pill showing a POI you'll pass on the route. Carries the category icon
+/// and tint so the strip reads at a glance ("bridge, playground, restroom").
+private struct POIChip: View {
+    let routePOI: POIAlongRoute
+
+    private var tint: Color {
+        let hex = routePOI.category.tintHex
+        return Color(red: Double((hex >> 16) & 0xFF) / 255,
+                     green: Double((hex >> 8) & 0xFF) / 255,
+                     blue: Double(hex & 0xFF) / 255)
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: routePOI.category.icon)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 18, height: 18)
+                .background(tint, in: Circle())
+            VStack(alignment: .leading, spacing: 0) {
+                Text(routePOI.poi.name ?? routePOI.category.label)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                Text(String(format: "%.2f mi in", routePOI.distanceAlongRoute / 1609.344))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(Color(.tertiarySystemBackground),
+                    in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
 extension TrailGraph.Way: Identifiable {
-    /// Synthetic id for sheet presentation. Uses pathwayID when present (stable
-    /// across data refreshes) and falls back to a hash of the node list.
     var id: String {
         if let p = pathwayID { return "p:" + p }
         return "n:" + nodeIndices.prefix(4).map(String.init).joined(separator: "-")
