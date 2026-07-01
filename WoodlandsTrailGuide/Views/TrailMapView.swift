@@ -20,8 +20,13 @@ struct TrailMapView: UIViewRepresentable {
     @Binding var selectedWay: TrailGraph.Way?
 
     let routingMode: Bool
+    /// True while the user is picking a waypoint via the "+ Add stop" button
+    /// on the route summary card. Taps in this mode append to
+    /// `waypointNodes` instead of replacing start/end.
+    @Binding var addingWaypoint: Bool
     @Binding var startNode: Int?
     @Binding var endNode: Int?
+    @Binding var waypointNodes: [Int]
     let routeNodeIndices: [Int]?
 
     let pois: POICatalog?
@@ -197,6 +202,10 @@ struct TrailMapView: UIViewRepresentable {
         if let s = startNode, s < graph.nodes.count {
             mapView.addAnnotation(WaypointAnnotation(
                 coordinate: graph.nodes[s].clCoord, kind: .start))
+        }
+        for (i, w) in waypointNodes.enumerated() where w < graph.nodes.count {
+            mapView.addAnnotation(WaypointAnnotation(
+                coordinate: graph.nodes[w].clCoord, kind: .waypoint(number: i + 1)))
         }
         if let e = endNode, e < graph.nodes.count {
             mapView.addAnnotation(WaypointAnnotation(
@@ -408,10 +417,20 @@ struct TrailMapView: UIViewRepresentable {
 
             if parent.routingMode {
                 let router = Router(graph: parent.graph)
-                if let nodeIdx = router.nearestNode(to: tapCoord) {
-                    if parent.startNode == nil { parent.startNode = nodeIdx }
-                    else if parent.endNode == nil { parent.endNode = nodeIdx }
-                    else { parent.endNode = nodeIdx }
+                guard let nodeIdx = router.nearestNode(to: tapCoord) else { return }
+                if parent.addingWaypoint {
+                    // In add-waypoint mode the tap always appends a stop
+                    // between start and end, then drops back to summary.
+                    parent.waypointNodes.append(nodeIdx)
+                    parent.addingWaypoint = false
+                } else if parent.startNode == nil {
+                    parent.startNode = nodeIdx
+                } else if parent.endNode == nil {
+                    parent.endNode = nodeIdx
+                } else {
+                    // Both endpoints already set — replace the end so the
+                    // user can tweak destination without wiping the route.
+                    parent.endNode = nodeIdx
                 }
                 return
             }
@@ -482,7 +501,12 @@ final class ContextLine: MKPolyline {
 // MARK: - Waypoint
 
 final class WaypointAnnotation: NSObject, MKAnnotation {
-    enum Kind { case start, end }
+    enum Kind: Hashable {
+        case start
+        case end
+        /// A mid-route stop. `number` is 1-indexed order along the route.
+        case waypoint(number: Int)
+    }
     let coordinate: CLLocationCoordinate2D
     let kind: Kind
     init(coordinate: CLLocationCoordinate2D, kind: Kind) {
@@ -499,7 +523,17 @@ final class WaypointAnnotationView: MKAnnotationView {
         let size: CGFloat = 28
         frame = CGRect(x: 0, y: 0, width: size, height: size)
         centerOffset = .zero
-        let color: UIColor = kind == .start ? Natural.startPinUI : Natural.endPinUI
+        let color: UIColor
+        var glyph: String? = nil
+        switch kind {
+        case .start:
+            color = Natural.startPinUI
+        case .end:
+            color = Natural.endPinUI
+        case .waypoint(let number):
+            color = Natural.waypointPinUI
+            glyph = "\(number)"
+        }
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
         image = renderer.image { _ in
             let rect = CGRect(x: 2, y: 2, width: size - 4, height: size - 4)
@@ -507,8 +541,23 @@ final class WaypointAnnotationView: MKAnnotationView {
             UIBezierPath(ovalIn: rect.insetBy(dx: -2, dy: -2)).fill()
             color.setFill()
             UIBezierPath(ovalIn: rect).fill()
-            Natural.pinRingUI.setFill()
-            UIBezierPath(ovalIn: rect.insetBy(dx: 7, dy: 7)).fill()
+            if let glyph {
+                // Waypoint: draw the order number instead of a center dot.
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: 13, weight: .heavy),
+                    .foregroundColor: UIColor.white,
+                ]
+                let s = (glyph as NSString)
+                let sz = s.size(withAttributes: attrs)
+                let origin = CGPoint(
+                    x: (size - sz.width) / 2,
+                    y: (size - sz.height) / 2 - 0.5
+                )
+                s.draw(at: origin, withAttributes: attrs)
+            } else {
+                Natural.pinRingUI.setFill()
+                UIBezierPath(ovalIn: rect.insetBy(dx: 7, dy: 7)).fill()
+            }
         }
     }
 }

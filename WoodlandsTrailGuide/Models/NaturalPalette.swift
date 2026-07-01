@@ -74,6 +74,11 @@ enum Natural {
     static let startPinUI = UIColor(red: 0.18, green: 0.55, blue: 0.30, alpha: 1.0)
     static let endPinUI   = UIColor(red: 0.770, green: 0.290, blue: 0.250, alpha: 1.0)
 
+    /// Mid-route waypoint pin. Warm amber so it reads distinct from both
+    /// the green start and the red end without clashing with the terracotta
+    /// route line.
+    static let waypointPinUI = UIColor(red: 0.76, green: 0.55, blue: 0.20, alpha: 1.0)
+
     /// Off-white used inside waypoint and POI pin rings. Slightly warm so
     /// the markers don't look stark against the cream-leaning UI.
     static let pinRingUI = UIColor(red: 0.985, green: 0.970, blue: 0.935, alpha: 1.0)

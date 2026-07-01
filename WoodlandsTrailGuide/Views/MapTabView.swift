@@ -14,6 +14,12 @@ struct MapTabView: View {
     @State private var routingMode = false
     @State private var startNode: Int?
     @State private var endNode: Int?
+    /// Ordered intermediate stops between start and end. Empty for a plain
+    /// A→B route. When non-empty the router computes A→wp₁→wp₂→…→B.
+    @State private var waypointNodes: [Int] = []
+    /// True while the user has tapped "+ Waypoint" and the next map tap
+    /// should append to `waypointNodes` instead of touching start/end.
+    @State private var addingWaypoint = false
     @State private var route: Router.Route?
     @State private var routePOIs: [POIAlongRoute] = []
 
@@ -47,8 +53,10 @@ struct MapTabView: View {
                     graph: graph,
                     selectedWay: $selectedWay,
                     routingMode: routingMode,
+                    addingWaypoint: $addingWaypoint,
                     startNode: $startNode,
                     endNode: $endNode,
+                    waypointNodes: $waypointNodes,
                     routeNodeIndices: route?.nodes,
                     pois: poiStore.pois,
                     polygons: poiStore.polygons,
@@ -65,6 +73,7 @@ struct MapTabView: View {
                 }
                 .onChange(of: startNode) { _, _ in updateRoute(graph: graph) }
                 .onChange(of: endNode) { _, _ in updateRoute(graph: graph) }
+                .onChange(of: waypointNodes) { _, _ in updateRoute(graph: graph) }
                 .onChange(of: locationManager.location) { _, _ in
                     updateProgress(graph: graph)
                 }
@@ -256,7 +265,28 @@ struct MapTabView: View {
     }
 
     private var hintCard: some View {
-        let isStart = (startNode == nil)
+        // Three variants: pick a start, pick a destination, or pick an
+        // intermediate waypoint after the user tapped "+ Waypoint".
+        let step: (eyebrow: String, title: String, subtitle: String)
+        if addingWaypoint {
+            step = (
+                "ADD A STOP",
+                "Tap a spot to route through",
+                "We'll reroute to go via this point."
+            )
+        } else if startNode == nil {
+            step = (
+                "Step 1 of 2",
+                "Tap your starting point",
+                "Drop a pin anywhere along a trail."
+            )
+        } else {
+            step = (
+                "Step 2 of 2",
+                "Tap your destination",
+                "We'll route along the pathway network."
+            )
+        }
         return HStack(alignment: .center, spacing: 14) {
             Image(systemName: "hand.tap.fill")
                 .font(.system(size: 22, weight: .bold))
@@ -264,22 +294,25 @@ struct MapTabView: View {
                 .frame(width: 44, height: 44)
                 .background(Color.white.opacity(0.20), in: Circle())
             VStack(alignment: .leading, spacing: 3) {
-                Text(isStart ? "Step 1 of 2" : "Step 2 of 2")
+                Text(step.eyebrow)
                     .font(.caption2.weight(.heavy))
                     .tracking(0.9)
                     .foregroundStyle(.white.opacity(0.78))
-                Text(isStart ? "Tap your starting point" : "Tap your destination")
+                Text(step.title)
                     .font(.headline.weight(.bold))
                     .foregroundStyle(.white)
-                Text(isStart
-                     ? "Drop a pin anywhere along a trail."
-                     : "We'll route along the pathway network.")
+                Text(step.subtitle)
                     .font(.footnote)
                     .foregroundStyle(.white.opacity(0.88))
             }
             Spacer(minLength: 0)
             Button {
-                clearRoute()
+                if addingWaypoint {
+                    // Bail out of add-waypoint mode without clearing route.
+                    addingWaypoint = false
+                } else {
+                    clearRoute()
+                }
             } label: {
                 Text("Cancel")
                     .font(.subheadline.weight(.semibold))
@@ -370,22 +403,46 @@ struct MapTabView: View {
                 }
             }
 
-            // Start button — flips into navigation mode.
-            Button {
-                startNavigation(graph: store.graph!)
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "figure.walk")
-                        .font(.subheadline.weight(.bold))
-                    Text("Start walking")
-                        .font(.subheadline.weight(.semibold))
+            // Bottom action row — add-waypoint on the left, start on the right.
+            HStack(spacing: 10) {
+                Button {
+                    addingWaypoint = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "mappin.and.ellipse")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Add stop")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundStyle(Natural.forest)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Natural.chipBg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Natural.forest, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .accessibilityLabel("Add a waypoint to route through")
+
+                Button {
+                    startNavigation(graph: store.graph!)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "figure.walk")
+                            .font(.subheadline.weight(.bold))
+                        Text("Start walking")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Natural.forest, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
             }
             .padding(.top, 4)
+
+            if !waypointNodes.isEmpty {
+                Text("\(waypointNodes.count) waypoint\(waypointNodes.count == 1 ? "" : "s") added")
+                    .font(.caption2)
+                    .foregroundStyle(Natural.inkMuted)
+            }
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
@@ -489,7 +546,8 @@ struct MapTabView: View {
             routeProgress = nil
             return
         }
-        let r = Router(graph: graph).route(from: s, to: e)
+        let stops = [s] + waypointNodes + [e]
+        let r = Router(graph: graph).route(through: stops)
         route = r
         if let r, let catalog = poiStore.pois {
             let coords = r.nodes.map { graph.nodes[$0].clCoord }
@@ -524,8 +582,10 @@ struct MapTabView: View {
     private func clearRoute() {
         routingMode = false
         navigationActive = false
+        addingWaypoint = false
         startNode = nil
         endNode = nil
+        waypointNodes = []
         route = nil
         routePOIs = []
         routeProgress = nil

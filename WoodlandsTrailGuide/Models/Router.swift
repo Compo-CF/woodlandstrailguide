@@ -116,11 +116,61 @@ struct Router {
     /// Dijkstra from `start` to `end`, minimizing total meters traversed.
     /// Returns nil if no path exists.
     func route(from start: Int, to end: Int) -> Route? {
+        route(through: [start, end])
+    }
+
+    /// Route through an ordered sequence of stops — [start, waypoint₁,
+    /// waypoint₂, …, end]. Each adjacent pair is computed with an
+    /// independent Dijkstra run and stitched together. Turn instructions,
+    /// named segments, and park listings are rebuilt over the combined
+    /// path so the summary reads as one continuous route.
+    ///
+    /// Callers can also use this to produce loops (same start and end with
+    /// a distant waypoint in between).
+    func route(through stops: [Int]) -> Route? {
+        guard stops.count >= 2 else {
+            if stops.count == 1 {
+                return Route(nodes: [stops[0]], lengthMeters: 0,
+                             namedSegments: [], parks: [], turnInstructions: [])
+            }
+            return nil
+        }
+        var combinedPath: [Int] = []
+        var combinedEdgeWays: [Int] = []
+        var totalMeters = 0.0
+        for i in 0..<(stops.count - 1) {
+            guard let segment = _pathFrom(stops[i], to: stops[i + 1]) else {
+                return nil
+            }
+            if combinedPath.isEmpty {
+                combinedPath = segment.path
+            } else if let last = combinedPath.last, last == segment.path.first {
+                // Adjacent segments share the seam node; drop the duplicate.
+                combinedPath.append(contentsOf: segment.path.dropFirst())
+            } else {
+                combinedPath.append(contentsOf: segment.path)
+            }
+            combinedEdgeWays.append(contentsOf: segment.edgeWays)
+            totalMeters += segment.lengthMeters
+        }
+        return Route(
+            nodes: combinedPath,
+            lengthMeters: totalMeters,
+            namedSegments: collapseSegments(edgeWays: combinedEdgeWays, path: combinedPath),
+            parks: uniqueParks(edgeWays: combinedEdgeWays),
+            turnInstructions: buildTurnInstructions(edgeWays: combinedEdgeWays, path: combinedPath)
+        )
+    }
+
+    /// The raw Dijkstra + reconstruction primitive shared by route(from:to:)
+    /// and route(through:). Returns nil on unreachable, empty edges for a
+    /// zero-length trip (start == end).
+    private func _pathFrom(_ start: Int, to end: Int)
+        -> (path: [Int], edgeWays: [Int], lengthMeters: Double)? {
         let n = graph.nodes.count
         guard start >= 0, start < n, end >= 0, end < n else { return nil }
         if start == end {
-            return Route(nodes: [start], lengthMeters: 0, namedSegments: [],
-                         parks: [], turnInstructions: [])
+            return (path: [start], edgeWays: [], lengthMeters: 0)
         }
 
         var dist = [Double](repeating: .infinity, count: n)
@@ -144,10 +194,8 @@ struct Router {
                 }
             }
         }
-
         guard dist[end].isFinite else { return nil }
 
-        // Reconstruct path
         var path: [Int] = []
         var edgeWays: [Int] = []
         var cur = end
@@ -158,14 +206,7 @@ struct Router {
         }
         path.reverse()
         edgeWays.reverse()
-
-        return Route(
-            nodes: path,
-            lengthMeters: dist[end],
-            namedSegments: collapseSegments(edgeWays: edgeWays, path: path),
-            parks: uniqueParks(edgeWays: edgeWays),
-            turnInstructions: buildTurnInstructions(edgeWays: edgeWays, path: path)
-        )
+        return (path: path, edgeWays: edgeWays, lengthMeters: dist[end])
     }
 
     /// Walk the path edge by edge, group consecutive edges by name, emit one
