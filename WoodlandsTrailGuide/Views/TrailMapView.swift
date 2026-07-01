@@ -44,6 +44,13 @@ struct TrailMapView: UIViewRepresentable {
     /// the map back to the user's location. Independent of `navigationActive`
     /// so the button works in both routing and idle modes.
     let recenterTick: Int
+    /// Bumped when the user picks a search result — coordinate stored below,
+    /// and the map pans to it when this counter changes.
+    let searchFocusTick: Int
+    let searchFocusCoordinate: CLLocationCoordinate2D?
+    /// Called when the user taps a POI annotation on the map. Passed the
+    /// POI + its owning category so MapTabView can present a detail sheet.
+    let onSelectPOI: (POI, POICategory) -> Void
 
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()
@@ -94,6 +101,16 @@ struct TrailMapView: UIViewRepresentable {
                 mapView.setUserTrackingMode(.followWithHeading, animated: true)
             }
             coord.appliedRecenterTick = recenterTick
+        }
+
+        if coord.appliedSearchTick != searchFocusTick, let target = searchFocusCoordinate {
+            mapView.setUserTrackingMode(.none, animated: false)
+            let region = MKCoordinateRegion(
+                center: target,
+                span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
+            )
+            mapView.setRegion(region, animated: true)
+            coord.appliedSearchTick = searchFocusTick
         }
 
         // ---- Polygons / creek lines (rebuild only when version changes) ----
@@ -262,6 +279,7 @@ struct TrailMapView: UIViewRepresentable {
         var appliedStyle: MapStyleChoice = .standard
         var appliedNavigationActive: Bool = false
         var appliedRecenterTick: Int = 0
+        var appliedSearchTick: Int = 0
 
         init(_ parent: TrailMapView) { self.parent = parent }
 
@@ -345,6 +363,15 @@ struct TrailMapView: UIViewRepresentable {
                 return v
             }
             return nil
+        }
+
+        // MARK: - Annotation taps
+
+        func mapView(_ mapView: MKMapView, didSelect annotation: MKAnnotation) {
+            if let poi = annotation as? POIAnnotation {
+                parent.onSelectPOI(poi.poi, poi.category)
+                mapView.deselectAnnotation(annotation, animated: false)
+            }
         }
 
         // MARK: - Zoom-based POI visibility
@@ -581,7 +608,8 @@ final class POIAnnotationView: MKAnnotationView {
     static let reuseID = "POI"
 
     func configure(for poi: POIAnnotation) {
-        canShowCallout = true
+        // Callout suppressed — tap opens the detail sheet instead.
+        canShowCallout = false
         clusteringIdentifier = "poi-\(poi.category.key)"
         displayPriority = .defaultLow
         let size: CGFloat = 24

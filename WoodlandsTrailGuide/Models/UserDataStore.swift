@@ -9,6 +9,9 @@ final class UserDataStore {
     var appLaunches: Int = 0
     var mapStyle: MapStyleChoice = .standard
     var kofiPromptLastShown: Date?
+    /// Log of successfully-completed walks (route arrived at destination).
+    /// Newest first. Rendered on the About tab.
+    var tripLog: [TripLogEntry] = []
 
     private let defaults = UserDefaults.standard
     private let favoritesKey = "favorites.v1"
@@ -16,6 +19,7 @@ final class UserDataStore {
     private let appLaunchesKey = "appLaunches.v1"
     private let mapStyleKey = "mapStyle.v1"
     private let kofiLastShownKey = "kofiPromptLastShown.v1"
+    private let tripLogKey = "tripLog.v1"
 
     init() {
         if let data = defaults.data(forKey: favoritesKey),
@@ -28,6 +32,10 @@ final class UserDataStore {
             mapStyle = parsed
         }
         kofiPromptLastShown = defaults.object(forKey: kofiLastShownKey) as? Date
+        if let data = defaults.data(forKey: tripLogKey),
+           let entries = try? JSONDecoder().decode([TripLogEntry].self, from: data) {
+            tripLog = entries
+        }
     }
 
     var hasSeenOnboarding: Bool {
@@ -112,6 +120,33 @@ final class UserDataStore {
         routesCompleted += 1
     }
 
+    // MARK: - Trip log
+
+    func recordTrip(distanceMeters: Double, startLabel: String, endLabel: String) {
+        let entry = TripLogEntry(
+            id: UUID(),
+            date: .now,
+            distanceMeters: distanceMeters,
+            startLabel: startLabel,
+            endLabel: endLabel
+        )
+        tripLog.insert(entry, at: 0)
+        // Cap to the most recent 100 to keep UserDefaults compact.
+        if tripLog.count > 100 { tripLog = Array(tripLog.prefix(100)) }
+        saveTripLog()
+    }
+
+    func deleteTrip(id: UUID) {
+        tripLog.removeAll { $0.id == id }
+        saveTripLog()
+    }
+
+    private func saveTripLog() {
+        if let data = try? JSONEncoder().encode(tripLog) {
+            defaults.set(data, forKey: tripLogKey)
+        }
+    }
+
     /// True when (a) the user has shown enough engagement to deserve being
     /// asked, and (b) we haven't asked recently. The actual decision to
     /// show a prompt still belongs to iOS — this just gates our call to
@@ -125,6 +160,19 @@ final class UserDataStore {
         }
         return true
     }
+}
+
+/// A completed walk. Persisted so users can look back at where they've been.
+struct TripLogEntry: Codable, Hashable, Identifiable {
+    let id: UUID
+    let date: Date
+    let distanceMeters: Double
+    /// Name of the first named segment along the route (e.g. "Sawmill Path").
+    let startLabel: String
+    /// Name of the last named segment along the route.
+    let endLabel: String
+
+    var miles: Double { distanceMeters / 1609.344 }
 }
 
 /// Map base-layer style. Mirrors MKMapConfiguration's three concrete subclasses.

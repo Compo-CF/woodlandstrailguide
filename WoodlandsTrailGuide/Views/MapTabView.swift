@@ -8,8 +8,18 @@ struct MapTabView: View {
     @Environment(POIStore.self) private var poiStore
     @Environment(LocationManager.self) private var locationManager
     @Environment(UserDataStore.self) private var userData
+    @Environment(WeatherStore.self) private var weatherStore
     @Environment(\.requestReview) private var requestReview
+    @State private var showingWeather = false
+    @State private var showingSearch = false
+    /// Bumped when the user picks a search result — TrailMapView watches this
+    /// alongside a stored `searchTargetCoordinate` and pans the map there.
+    @State private var searchFocusTick: Int = 0
+    @State private var searchFocusCoordinate: CLLocationCoordinate2D?
     @State private var selectedWay: TrailGraph.Way?
+    /// POI + its category pushed by TrailMapView when the user taps a
+    /// POI annotation. Presented as a POIDetailSheet.
+    @State private var selectedPOI: (poi: POI, category: POICategory)?
 
     @State private var routingMode = false
     @State private var startNode: Int?
@@ -62,7 +72,12 @@ struct MapTabView: View {
                     polygons: poiStore.polygons,
                     mapStyle: userData.mapStyle,
                     navigationActive: navigationActive,
-                    recenterTick: recenterTick
+                    recenterTick: recenterTick,
+                    searchFocusTick: searchFocusTick,
+                    searchFocusCoordinate: searchFocusCoordinate,
+                    onSelectPOI: { poi, category in
+                        selectedPOI = (poi, category)
+                    }
                 )
                 .ignoresSafeArea(edges: .top)
                 .safeAreaInset(edge: .bottom) {
@@ -82,6 +97,13 @@ struct MapTabView: View {
                     // the best possible moment to ask for a review.
                     if !wasArrived && isArrived {
                         userData.markRouteCompleted()
+                        if let r = route {
+                            userData.recordTrip(
+                                distanceMeters: r.lengthMeters,
+                                startLabel: r.namedSegments.first?.name ?? "Start",
+                                endLabel: r.namedSegments.last?.name ?? "Destination"
+                            )
+                        }
                         if userData.eligibleForReviewRequest {
                             Task { @MainActor in
                                 try? await Task.sleep(for: .seconds(3))
@@ -100,6 +122,19 @@ struct MapTabView: View {
                 .padding(.top, 12)
                 .padding(.trailing, 12)
 
+                VStack {
+                    HStack(spacing: 10) {
+                        WeatherPill(snapshot: weatherStore.snapshot) {
+                            showingWeather = true
+                        }
+                        searchButton
+                        Spacer()
+                    }
+                    .padding(.top, 12)
+                    .padding(.leading, 12)
+                    Spacer()
+                }
+
                 if navigationActive, let r = route {
                     VStack { Spacer(); navigationBanner(route: r) }
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -114,7 +149,51 @@ struct MapTabView: View {
         .animation(.easeInOut(duration: 0.22), value: routingMode)
         .animation(.easeInOut(duration: 0.22), value: route != nil)
         .animation(.easeInOut(duration: 0.22), value: navigationActive)
-        .onAppear { locationManager.requestPermission() }
+        .onAppear {
+            locationManager.requestPermission()
+            Task {
+                await weatherStore.refresh(
+                    latitude: locationManager.location?.coordinate.latitude,
+                    longitude: locationManager.location?.coordinate.longitude
+                )
+            }
+        }
+        .onChange(of: locationManager.location) { _, newLoc in
+            guard let newLoc else { return }
+            Task {
+                await weatherStore.refresh(
+                    latitude: newLoc.coordinate.latitude,
+                    longitude: newLoc.coordinate.longitude
+                )
+            }
+        }
+        .sheet(isPresented: $showingSearch) {
+            if let graph = store.graph {
+                MapSearchSheet(
+                    graph: graph,
+                    pois: poiStore.pois,
+                    userLocation: locationManager.location,
+                    onSelect: { result in
+                        searchFocusCoordinate = result.coordinate
+                        searchFocusTick &+= 1
+                    }
+                )
+            }
+        }
+        .sheet(isPresented: $showingWeather) {
+            WeatherDetailSheet(
+                snapshot: weatherStore.snapshot,
+                lastFetch: weatherStore.lastFetch,
+                onRefresh: {
+                    await weatherStore.refresh(
+                        latitude: locationManager.location?.coordinate.latitude,
+                        longitude: locationManager.location?.coordinate.longitude,
+                        force: true
+                    )
+                }
+            )
+            .presentationDetents([.medium])
+        }
         .onChange(of: navigationActive) { _, isOn in
             // Keep the screen on while walking; restore default on exit.
             UIApplication.shared.isIdleTimerDisabled = isOn
@@ -122,6 +201,20 @@ struct MapTabView: View {
         .sheet(item: $selectedWay) { way in
             TrailDetailSheet(way: way)
                 .presentationDetents([.height(220), .medium])
+        }
+        .sheet(item: Binding(
+            get: { selectedPOI.map { POISelection(poi: $0.poi, category: $0.category) } },
+            set: { newValue in
+                selectedPOI = newValue.map { ($0.poi, $0.category) }
+            }
+        )) { sel in
+            POIDetailSheet(
+                poi: sel.poi,
+                category: sel.category,
+                userLocation: locationManager.location,
+                onRouteHere: { routeToPOI(sel.poi) }
+            )
+            .presentationDetents([.height(300), .medium])
         }
         .sheet(isPresented: $showingIntro, onDismiss: {
             userData.hasSeenRoutingIntro = true
@@ -214,6 +307,22 @@ struct MapTabView: View {
             .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
         }
         .accessibilityLabel("Map style: \(userData.mapStyle.label). Tap to change.")
+    }
+
+    /// Full-screen search covering trails, parks, and POIs.
+    private var searchButton: some View {
+        Button {
+            showingSearch = true
+        } label: {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Natural.forest)
+                .frame(width: 44, height: 44)
+                .background(Natural.buttonBg, in: Circle())
+                .overlay(Circle().stroke(Natural.hairline, lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+        }
+        .accessibilityLabel("Search trails, parks, and amenities")
     }
 
     /// Snap the map back to the user's current location. During navigation
@@ -579,6 +688,21 @@ struct MapTabView: View {
         }
     }
 
+    /// Start a route from the user's current location (or ask them to tap
+    /// a start if we don't have one) to the given POI. Snaps both ends to
+    /// their nearest graph nodes.
+    private func routeToPOI(_ poi: POI) {
+        guard let graph = store.graph else { return }
+        let router = Router(graph: graph)
+        guard let dest = router.nearestNode(to: poi.coordinate) else { return }
+        endNode = dest
+        if startNode == nil, let userLoc = locationManager.location {
+            startNode = router.nearestNode(to: userLoc.coordinate)
+        }
+        routingMode = true
+        addingWaypoint = false
+    }
+
     private func clearRoute() {
         routingMode = false
         navigationActive = false
@@ -664,6 +788,15 @@ private struct POIChip: View {
         .background(Natural.chipBg,
                     in: RoundedRectangle(cornerRadius: 10))
     }
+}
+
+/// Identifiable wrapper for the sheet(item:) binding — a tuple isn't
+/// Identifiable on its own, and both the POI and its category are needed
+/// to render the detail sheet.
+private struct POISelection: Identifiable {
+    let poi: POI
+    let category: POICategory
+    var id: String { "\(category.key):\(poi.id)" }
 }
 
 extension TrailGraph.Way: Identifiable {

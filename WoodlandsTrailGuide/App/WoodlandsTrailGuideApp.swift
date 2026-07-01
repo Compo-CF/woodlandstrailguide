@@ -8,6 +8,7 @@ struct WoodlandsTrailGuideApp: App {
     @State private var poiStore = POIStore()
     @State private var locationManager = LocationManager()
     @State private var userData = UserDataStore()
+    @State private var weatherStore = WeatherStore()
 
     init() {
         // Initialize Google Mobile Ads SDK. Ads start loading immediately;
@@ -22,6 +23,7 @@ struct WoodlandsTrailGuideApp: App {
                 .environment(poiStore)
                 .environment(locationManager)
                 .environment(userData)
+                .environment(weatherStore)
                 .onChange(of: locationManager.location) { _, newValue in
                     store.userLocation = newValue
                 }
