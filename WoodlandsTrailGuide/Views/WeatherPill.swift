@@ -114,7 +114,7 @@ struct WeatherDetailSheet: View {
                         }
                     } label: {
                         Image(systemName: "arrow.clockwise")
-                            .symbolEffect(.rotate, isActive: refreshing)
+                            .symbolEffect(.pulse, isActive: refreshing)
                     }
                     .disabled(refreshing)
                 }
