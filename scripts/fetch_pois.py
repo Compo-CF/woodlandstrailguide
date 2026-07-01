@@ -120,31 +120,70 @@ LINE_LAYERS = {
 
 
 def fetch_layer(layer_name: str, page_size: int = 1000):
-    """Page through a FeatureServer/0 query. Some layers reject `where=1=1`
-    with a 400 — they need a real predicate. Retry with `OBJECTID > 0` in
-    that case, and finally with the MapServer endpoint as a last resort."""
-    queries_to_try = [
-        (f"{BASE}/{layer_name}/FeatureServer/0/query", "1=1"),
-        (f"{BASE}/{layer_name}/FeatureServer/0/query", "OBJECTID>0"),
-        (f"{BASE}/{layer_name}/MapServer/0/query",     "1=1"),
+    """Page through a FeatureServer/0 query. Township layers are inconsistent
+    about what queries they accept:
+      - Most accept `outFields=*` and 1000-record pages ("fast path").
+      - Some reject `*` because of `esriFieldTypeGlobalID` columns Esri's
+        GeoJSON serializer chokes on ("metadata-safe fields" fallback).
+      - A few (e.g. PARKING_LOTS) time out server-side on pages larger than
+        a couple dozen features, even with safe fields ("small pages" fallback).
+    Tries each strategy in order and returns on the first that works."""
+    url = f"{BASE}/{layer_name}/FeatureServer/0/query"
+
+    def try_query(out_fields: str, ps: int):
+        return _page(url, "1=1", out_fields, ps, layer_name)
+
+    # 1. Fast path — big pages, all fields.
+    try:
+        return try_query("*", page_size)
+    except _ArcGISQueryError:
+        pass
+
+    # 2. Fetch metadata, drop GlobalID + dotted qualified-name fields, retry.
+    meta_url = f"{BASE}/{layer_name}/FeatureServer/0?f=json"
+    meta_req = urllib.request.Request(meta_url, headers={"User-Agent": UA})
+    with urllib.request.urlopen(meta_req, timeout=60) as resp:
+        meta = json.loads(resp.read().decode("utf-8"))
+    safe_fields = [
+        f["name"] for f in meta.get("fields", [])
+        if f.get("type") != "esriFieldTypeGlobalID"
+        and "." not in f["name"]  # skip WDLGIS.DBO.Foo.Bar shadow-table fields
     ]
-    last_err = None
-    for url, where in queries_to_try:
+    if not safe_fields:
+        raise RuntimeError(f"{layer_name}: no safe fields to request")
+    out_fields = ",".join(safe_fields)
+    try:
+        return try_query(out_fields, page_size)
+    except _ArcGISQueryError:
+        pass
+
+    # 3. Small-page fallback for layers that time out on large queries.
+    #    Try progressively smaller pages — some Township layers only tolerate
+    #    single-digit-record requests despite claiming maxRecordCount=1000.
+    for ps in (50, 10, 5, 1):
         try:
-            return _page(url, where, page_size, layer_name)
-        except Exception as e:
-            last_err = e
+            return try_query(out_fields, ps)
+        except _ArcGISQueryError:
             continue
-    raise last_err if last_err else RuntimeError(f"{layer_name}: unknown failure")
+    raise _ArcGISQueryError(f"{layer_name}: exhausted all query strategies")
 
 
-def _page(url: str, where: str, page_size: int, layer_name: str):
-    features = []
+class _ArcGISQueryError(RuntimeError):
+    """Server returned HTTP 200 with a JSON error body — treat as a
+    recoverable query failure so we can retry with different outFields."""
+    pass
+
+
+def _page(url: str, where: str, out_fields: str, page_size: int, layer_name: str):
+    """Page through a layer. If a mid-way page fails but we already have
+    some features, return the partial results — a few individually-broken
+    records shouldn't discard the whole layer."""
+    features: list = []
     offset = 0
     while True:
         q = {
             "where": where,
-            "outFields": "*",
+            "outFields": out_fields,
             "outSR": "4326",
             "f": "geojson",
             "returnGeometry": "true",
@@ -153,10 +192,26 @@ def _page(url: str, where: str, page_size: int, layer_name: str):
         }
         full = f"{url}?{urllib.parse.urlencode(q)}"
         req = urllib.request.Request(full, headers={"User-Agent": UA, "Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            if features:
+                return features
+            raise
         if isinstance(data, dict) and data.get("error"):
-            raise RuntimeError(f"{layer_name}: {data['error']}")
+            # First-page failure is a real error; mid-way is a bad record —
+            # skip forward one record and try to keep going.
+            if not features:
+                raise _ArcGISQueryError(f"{layer_name}: {data['error']}")
+            if page_size == 1:
+                offset += 1  # move past the bad record
+                if offset > 100_000:  # runaway guard
+                    return features
+                continue
+            # Shrink to 1-per-request to isolate the bad record.
+            page_size = 1
+            continue
         page = data.get("features", []) or []
         features.extend(page)
         if len(page) < page_size:
