@@ -7,7 +7,7 @@ struct AboutTabView: View {
     @State private var showingReport = false
 
     private let fishingGuideURL = URL(string: "https://apps.apple.com/app/id6773501518")!
-    private let kofiURL = URL(string: "https://ko-fi.com/subtlefoodie")!
+    private let supportURL = URL(string: "https://compo-cf.github.io/woodlandstrailguide/support.html")!
 
     var body: some View {
         NavigationStack {
@@ -84,7 +84,7 @@ struct AboutTabView: View {
                     }
                 }
 
-                Section("Feedback") {
+                Section("Help & feedback") {
                     Button {
                         showingReport = true
                     } label: {
@@ -99,10 +99,18 @@ struct AboutTabView: View {
                                 .foregroundStyle(.tertiary)
                         }
                     }
-                }
-
-                Section("Support the developer") {
-                    Link("Buy me a coffee on Ko-fi", destination: kofiURL)
+                    Link(destination: supportURL) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "questionmark.circle")
+                                .foregroundStyle(Natural.forest)
+                            Text("Support & FAQ")
+                                .foregroundStyle(Natural.ink)
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
                 }
 
                 Section {

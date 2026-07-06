@@ -11,7 +11,6 @@ struct OnboardingSheet: View {
     @State private var page: Int = 0
 
     private let totalPages = 4
-    private let kofiURL = URL(string: "https://ko-fi.com/subtlefoodie")!
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,7 +18,7 @@ struct OnboardingSheet: View {
                 OverviewPage().tag(0)
                 DataPage().tag(1)
                 FeaturesPage().tag(2)
-                RoutingPage(kofiURL: kofiURL).tag(3)
+                RoutingPage().tag(3)
             }
             .tabViewStyle(.page(indexDisplayMode: .always))
             .indexViewStyle(.page(backgroundDisplayMode: .interactive))
@@ -148,7 +147,7 @@ private struct DataPage: View {
                 }
                 .padding(.horizontal, 20)
 
-                Text("Nothing you do in the app leaves your phone unless you tap \"Report a problem\" or the Ko-fi link.")
+                Text("Nothing you do in the app leaves your phone unless you tap \"Report a problem.\"")
                     .font(.footnote)
                     .foregroundStyle(Natural.inkMuted)
                     .multilineTextAlignment(.center)
@@ -259,15 +258,13 @@ private struct FeatureRow: View {
     }
 }
 
-// MARK: - Page 4: Routing walkthrough + support card
+// MARK: - Page 4: Routing walkthrough
 
 private struct RoutingPage: View {
-    let kofiURL: URL
-
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
-                Spacer(minLength: 24)
+                Spacer(minLength: 32)
                 Image(systemName: "point.topleft.down.to.point.bottomright.curvepath.fill")
                     .font(.system(size: 56, weight: .light))
                     .foregroundStyle(Natural.forest)
@@ -292,53 +289,18 @@ private struct RoutingPage: View {
                 }
                 .padding(.horizontal, 20)
 
-                // Support card
-                VStack(spacing: 10) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "cup.and.saucer.fill")
-                            .font(.title3)
-                            .foregroundStyle(.white)
-                            .frame(width: 34, height: 34)
-                            .background(Natural.route, in: Circle())
-                        Text("Built by a local in his spare time")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(Natural.ink)
-                        Spacer(minLength: 0)
-                    }
-                    Text("If the app's useful, a coffee on Ko-fi keeps the trail data growing. No pressure either way.")
-                        .font(.footnote)
-                        .foregroundStyle(Natural.inkMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Link(destination: kofiURL) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "heart.fill")
-                                .font(.caption.weight(.bold))
-                            Text("Buy me a coffee on Ko-fi")
-                                .font(.subheadline.weight(.semibold))
-                        }
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 11)
-                        .background(Natural.route, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                    }
-                    .padding(.top, 2)
-                }
-                .padding(16)
-                .background(Natural.chipBg, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Natural.hairline, lineWidth: 0.5)
-                )
-                .padding(.horizontal, 20)
-                .padding(.top, 10)
-
                 Spacer(minLength: 48)
             }
             .frame(maxWidth: .infinity)
         }
     }
 }
+
+// A support card previously lived on this last page linking to Ko-fi.
+// Removed to comply with App Store Review Guideline 3.1.1 — donations
+// associated with the app itself must go through In-App Purchase, not
+// external payment mechanisms. Revisit with a Tip Jar IAP if we want
+// tips back.
 
 private struct RouteStep: View {
     let number: Int
