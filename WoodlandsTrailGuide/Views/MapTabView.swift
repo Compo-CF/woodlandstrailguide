@@ -10,6 +10,7 @@ struct MapTabView: View {
     @Environment(UserDataStore.self) private var userData
     @Environment(WeatherStore.self) private var weatherStore
     @Environment(RoutingBridge.self) private var routingBridge
+    @Environment(ElevationService.self) private var elevationService
     @Environment(\.requestReview) private var requestReview
     @State private var showingWeather = false
     @State private var showingSearch = false
@@ -612,6 +613,17 @@ struct MapTabView: View {
                             }
                         }
                     }
+                }
+            }
+
+            if let graph = store.graph,
+               let profile = elevationService.profile(for: r, graph: graph) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Elevation")
+                        .font(.caption2.smallCaps())
+                        .foregroundStyle(Natural.inkMuted)
+                        .tracking(0.6)
+                    ElevationChartView(profile: profile)
                 }
             }
 

@@ -40,12 +40,13 @@ targets:
       properties:
         CFBundleDisplayName: WTG
         CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "9"
+        CFBundleVersion: "10"
         CFBundleIconName: AppIcon
         UILaunchScreen:
           UIColorName: ""
         NSLocationWhenInUseUsageDescription: Used to show your position on the trails and find nearby trailheads.
         NSUserTrackingUsageDescription: Used to show relevant ads that help keep this app free and updated.
+        NSPhotoLibraryUsageDescription: Used only when you tap "Add a photo" on a point of interest — photos stay on your device and are never uploaded.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIRequiredDeviceCapabilities:
