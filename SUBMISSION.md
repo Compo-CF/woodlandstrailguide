@@ -69,7 +69,7 @@ WHAT'S INSIDE
 HOW IT'S BUILT
 Trail and amenity data come from The Woodlands Township's public ArcGIS GIS services — the same database the Township uses internally. The data is bundled with the app for offline use and refreshed over the air when the Township updates its records, so new pathways and amenities show up without an app update.
 
-This app is built and maintained independently by a local — not by The Woodlands Township, and not affiliated with or endorsed by the Township. If it's useful, a coffee on Ko-fi keeps the trail data growing.
+This app is built and maintained independently by a local — not by The Woodlands Township, and not affiliated with or endorsed by the Township. Feedback and issue reports are welcome via the in-app "Report a problem" flow.
 
 ATTRIBUTION
 Trail data © The Woodlands Township GIS, used under public-records availability. Map base by Apple Maps. Built with SwiftUI and MapKit.
