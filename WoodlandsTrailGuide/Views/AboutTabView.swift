@@ -4,7 +4,11 @@ struct AboutTabView: View {
     @Environment(TrailStore.self) private var store
     @Environment(UserDataStore.self) private var userData
     @Environment(LocationManager.self) private var locationManager
+    @Environment(IAPStore.self) private var iap
     @State private var showingReport = false
+    @State private var showingTipJar = false
+    @State private var isRestoring = false
+    @State private var isPurchasingRemoveAds = false
 
     private let fishingGuideURL = URL(string: "https://apps.apple.com/app/id6773501518")!
     private let supportURL = URL(string: "https://compo-cf.github.io/woodlandstrailguide/support.html")!
@@ -98,6 +102,108 @@ struct AboutTabView: View {
                     }
                 }
 
+                Section("Support the developer") {
+                    Button {
+                        showingTipJar = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "cup.and.saucer.fill")
+                                .foregroundStyle(Natural.route)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Send a tip")
+                                    .foregroundStyle(Natural.ink)
+                                if iap.tipCount > 0 {
+                                    Text("You've supported \(iap.tipCount) time\(iap.tipCount == 1 ? "" : "s") — thank you")
+                                        .font(.caption)
+                                        .foregroundStyle(Natural.forest)
+                                }
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+
+                Section("Remove ads") {
+                    if iap.hasRemovedAds {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundStyle(Natural.forest)
+                            Text("Ads removed")
+                                .foregroundStyle(Natural.ink)
+                            Spacer()
+                            Text("Thanks!")
+                                .font(.caption)
+                                .foregroundStyle(Natural.inkMuted)
+                        }
+                    } else if let product = iap.removeAdsProduct {
+                        Button {
+                            Task {
+                                isPurchasingRemoveAds = true
+                                await iap.purchase(product)
+                                isPurchasingRemoveAds = false
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "rectangle.slash")
+                                    .foregroundStyle(Natural.forest)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Remove ads")
+                                        .foregroundStyle(Natural.ink)
+                                    Text("Permanently hide the banner. One-time purchase.")
+                                        .font(.caption)
+                                        .foregroundStyle(Natural.inkMuted)
+                                }
+                                Spacer()
+                                if isPurchasingRemoveAds {
+                                    ProgressView()
+                                } else {
+                                    Text(product.displayPrice)
+                                        .font(.subheadline.weight(.bold).monospacedDigit())
+                                        .foregroundStyle(Natural.ink)
+                                }
+                            }
+                        }
+                        .disabled(isPurchasingRemoveAds)
+                    } else {
+                        HStack(spacing: 8) {
+                            Image(systemName: "rectangle.slash")
+                                .foregroundStyle(Natural.inkMuted)
+                            Text("Remove ads")
+                                .foregroundStyle(Natural.inkMuted)
+                            Spacer()
+                            if iap.isLoading {
+                                ProgressView()
+                            } else {
+                                Text("Unavailable")
+                                    .font(.caption)
+                                    .foregroundStyle(Natural.inkMuted)
+                            }
+                        }
+                    }
+                    Button {
+                        Task {
+                            isRestoring = true
+                            await iap.restorePurchases()
+                            isRestoring = false
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.clockwise")
+                                .foregroundStyle(Natural.forest)
+                            Text("Restore purchases")
+                                .foregroundStyle(Natural.ink)
+                            Spacer()
+                            if isRestoring {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isRestoring)
+                }
+
                 Section("Help & feedback") {
                     Button {
                         showingReport = true
@@ -136,6 +242,9 @@ struct AboutTabView: View {
             .navigationTitle("About")
             .sheet(isPresented: $showingReport) {
                 ReportProblemSheet(userLocation: locationManager.location)
+            }
+            .sheet(isPresented: $showingTipJar) {
+                TipJarSheet()
             }
         }
     }

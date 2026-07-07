@@ -3,8 +3,10 @@ import SwiftUI
 struct TrailDetailSheet: View {
     let way: TrailGraph.Way
     @Environment(\.dismiss) private var dismiss
+    @Environment(UserDataStore.self) private var userData
 
     private var miles: Double { way.lengthMeters / 1609.344 }
+    private var isFavorited: Bool { userData.isFavorite(way.id) }
 
     var body: some View {
         NavigationStack {
@@ -45,6 +47,15 @@ struct TrailDetailSheet: View {
             .navigationTitle(way.name ?? "Trail segment")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        userData.toggleFavorite(way.id)
+                    } label: {
+                        Image(systemName: isFavorited ? "heart.fill" : "heart")
+                            .foregroundStyle(isFavorited ? Natural.route : Natural.forest)
+                    }
+                    .accessibilityLabel(isFavorited ? "Remove from favorites" : "Add to favorites")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
                 }

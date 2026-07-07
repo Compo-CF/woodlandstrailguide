@@ -11,6 +11,7 @@ struct MapTabView: View {
     @Environment(WeatherStore.self) private var weatherStore
     @Environment(RoutingBridge.self) private var routingBridge
     @Environment(ElevationService.self) private var elevationService
+    @Environment(IAPStore.self) private var iapStore
     @Environment(\.requestReview) private var requestReview
     @State private var showingWeather = false
     @State private var showingSearch = false
@@ -93,10 +94,12 @@ struct MapTabView: View {
                 )
                 .ignoresSafeArea(edges: .top)
                 .safeAreaInset(edge: .bottom) {
-                    BannerAdView(adUnitID: bannerAdUnitID)
-                        .frame(height: 50)
-                        .frame(maxWidth: .infinity)
-                        .background(Natural.cardBg)
+                    if !iapStore.hasRemovedAds {
+                        BannerAdView(adUnitID: bannerAdUnitID)
+                            .frame(height: 50)
+                            .frame(maxWidth: .infinity)
+                            .background(Natural.cardBg)
+                    }
                 }
                 .onChange(of: startNode) { _, _ in updateRoute(graph: graph) }
                 .onChange(of: endNode) { _, _ in updateRoute(graph: graph) }
