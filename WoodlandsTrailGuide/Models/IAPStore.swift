@@ -50,9 +50,11 @@ final class IAPStore {
         Task { await refresh() }
     }
 
-    deinit {
-        updatesTask?.cancel()
-    }
+    // No deinit — IAPStore is instantiated at app launch and lives for the
+    // process lifetime. Swift 5.10's stricter concurrency checking rejects
+    // touching @MainActor-isolated properties from a nonisolated deinit, and
+    // there's no meaningful cleanup work here anyway; the transaction
+    // listener terminates when the process exits.
 
     // MARK: - Products & entitlements
 
