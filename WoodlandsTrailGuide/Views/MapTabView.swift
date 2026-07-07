@@ -12,6 +12,15 @@ struct MapTabView: View {
     @Environment(\.requestReview) private var requestReview
     @State private var showingWeather = false
     @State private var showingSearch = false
+    /// First moment the user drifted outside `offRouteThreshold`. Cleared
+    /// when they're back within range. When the drift persists past
+    /// `offRouteDuration`, we silently recompute a new route from their
+    /// current position.
+    @State private var offRouteSince: Date?
+    /// Brief "Rerouted" toast shown after an auto-reroute fires.
+    @State private var showingReroutedToast = false
+    private let offRouteThreshold: Double = 100    // meters
+    private let offRouteDuration: TimeInterval = 8 // seconds sustained
     /// Bumped when the user picks a search result — TrailMapView watches this
     /// alongside a stored `searchTargetCoordinate` and pans the map there.
     @State private var searchFocusTick: Int = 0
@@ -142,6 +151,25 @@ struct MapTabView: View {
                     VStack { Spacer(); routingCard }
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
+
+                if showingReroutedToast {
+                    VStack {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.subheadline.weight(.bold))
+                            Text("Rerouted")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .background(Natural.forest, in: Capsule())
+                        .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
+                        .padding(.top, 76)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
             } else {
                 loadingOrError
             }
@@ -149,6 +177,7 @@ struct MapTabView: View {
         .animation(.easeInOut(duration: 0.22), value: routingMode)
         .animation(.easeInOut(duration: 0.22), value: route != nil)
         .animation(.easeInOut(duration: 0.22), value: navigationActive)
+        .animation(.easeInOut(duration: 0.28), value: showingReroutedToast)
         .onAppear {
             locationManager.requestPermission()
             Task {
@@ -396,43 +425,71 @@ struct MapTabView: View {
                 "We'll route along the pathway network."
             )
         }
-        return HStack(alignment: .center, spacing: 14) {
-            Image(systemName: "hand.tap.fill")
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background(Color.white.opacity(0.20), in: Circle())
-            VStack(alignment: .leading, spacing: 3) {
-                Text(step.eyebrow)
-                    .font(.caption2.weight(.heavy))
-                    .tracking(0.9)
-                    .foregroundStyle(.white.opacity(0.78))
-                Text(step.title)
-                    .font(.headline.weight(.bold))
+        return VStack(spacing: 10) {
+            HStack(alignment: .center, spacing: 14) {
+                Image(systemName: "hand.tap.fill")
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.white)
-                Text(step.subtitle)
-                    .font(.footnote)
-                    .foregroundStyle(.white.opacity(0.88))
-            }
-            Spacer(minLength: 0)
-            Button {
-                if addingWaypoint {
-                    // Bail out of add-waypoint mode without clearing route.
-                    addingWaypoint = false
-                } else {
-                    clearRoute()
+                    .frame(width: 44, height: 44)
+                    .background(Color.white.opacity(0.20), in: Circle())
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(step.eyebrow)
+                        .font(.caption2.weight(.heavy))
+                        .tracking(0.9)
+                        .foregroundStyle(.white.opacity(0.78))
+                    Text(step.title)
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.white)
+                    Text(step.subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.88))
                 }
-            } label: {
-                Text("Cancel")
+                Spacer(minLength: 0)
+                Button {
+                    if addingWaypoint {
+                        addingWaypoint = false
+                    } else {
+                        clearRoute()
+                    }
+                } label: {
+                    Text("Cancel")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        .overlay(
+                            Capsule().stroke(Color.white.opacity(0.7), lineWidth: 1.2)
+                        )
+                }
+            }
+
+            // "Use my location" shortcut — only offered before start is set
+            // AND when we actually have a fix to work with.
+            if startNode == nil && !addingWaypoint, let userLoc = locationManager.location {
+                Button {
+                    useCurrentLocationAsStart(userLoc)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "location.fill")
+                        Text("Use my location as start")
+                    }
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12).padding(.vertical, 7)
-                    .overlay(
-                        Capsule().stroke(Color.white.opacity(0.7), lineWidth: 1.2)
-                    )
+                    .foregroundStyle(Natural.route)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
+    }
+
+    /// Snap the user's location to the nearest graph node and set it as the
+    /// route start. Called from the "Use my location" shortcut on the hint
+    /// card and from routeToPOI when no start is set.
+    private func useCurrentLocationAsStart(_ location: CLLocation) {
+        guard let graph = store.graph,
+              let idx = Router(graph: graph).nearestNode(to: location.coordinate) else { return }
+        startNode = idx
     }
 
     private func routeSummaryCard(_ r: Router.Route) -> some View {
@@ -676,7 +733,36 @@ struct MapTabView: View {
               let loc = locationManager.location else {
             return
         }
-        routeProgress = Router(graph: graph).progress(along: r, at: loc)
+        let router = Router(graph: graph)
+        let progress = router.progress(along: r, at: loc)
+        routeProgress = progress
+
+        // Off-route auto-reroute: if the user has drifted > threshold for
+        // sustained duration, silently recompute a new route from their
+        // current position to the same destination. Waypoints are dropped —
+        // the user has already moved past whatever waypoint context existed.
+        if progress.distanceFromRoute > offRouteThreshold, !progress.isArrived {
+            if offRouteSince == nil {
+                offRouteSince = .now
+            } else if let since = offRouteSince,
+                      Date.now.timeIntervalSince(since) > offRouteDuration,
+                      let end = endNode,
+                      let newStart = router.nearestNode(to: loc.coordinate),
+                      let rerouted = router.route(from: newStart, to: end) {
+                route = rerouted
+                startNode = newStart
+                waypointNodes = []
+                routeProgress = router.progress(along: rerouted, at: loc)
+                offRouteSince = nil
+                showingReroutedToast = true
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(2.5))
+                    showingReroutedToast = false
+                }
+            }
+        } else {
+            offRouteSince = nil
+        }
     }
 
     private func startNavigation(graph: TrailGraph) {

@@ -47,6 +47,20 @@ struct AboutTabView: View {
                 }
 
                 if !userData.tripLog.isEmpty {
+                    let stats = userData.tripStats
+                    Section("Your walking stats") {
+                        HStack(spacing: 0) {
+                            StatCell(number: String(format: "%.1f", stats.totalMiles), label: "miles walked")
+                            Divider().frame(height: 34)
+                            StatCell(number: "\(stats.walkCount)", label: "walks")
+                        }
+                        HStack(spacing: 0) {
+                            StatCell(number: String(format: "%.2f", stats.longestMiles), label: "longest")
+                            Divider().frame(height: 34)
+                            StatCell(number: "\(stats.currentStreakDays)", label: stats.currentStreakDays == 1 ? "day streak" : "day streak")
+                        }
+                    }
+
                     Section("Recent walks") {
                         ForEach(userData.tripLog.prefix(10)) { trip in
                             VStack(alignment: .leading, spacing: 3) {
@@ -126,3 +140,23 @@ struct AboutTabView: View {
         }
     }
 }
+
+private struct StatCell: View {
+    let number: String
+    let label: String
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(number)
+                .font(.title3.weight(.bold).monospacedDigit())
+                .foregroundStyle(Natural.ink)
+            Text(label)
+                .font(.caption2)
+                .textCase(.uppercase)
+                .tracking(0.5)
+                .foregroundStyle(Natural.inkMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+    }
+}
+

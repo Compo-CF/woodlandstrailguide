@@ -147,6 +147,38 @@ final class UserDataStore {
         }
     }
 
+    // MARK: - Aggregated trip stats
+
+    /// Rolls the trip log into a small stats snapshot: total miles, total
+    /// walks, longest single walk, and consecutive-day streak. Recomputed
+    /// on each access, but tripLog is tiny (capped at 100 entries) so this
+    /// is essentially free.
+    var tripStats: TripStats {
+        var total = 0.0
+        var longest = 0.0
+        let calendar = Calendar.current
+        var walkDays = Set<Date>()
+        for entry in tripLog {
+            total += entry.distanceMeters
+            longest = max(longest, entry.distanceMeters)
+            walkDays.insert(calendar.startOfDay(for: entry.date))
+        }
+        // Streak: count consecutive days walking, working back from today.
+        var streak = 0
+        var cursor = calendar.startOfDay(for: .now)
+        while walkDays.contains(cursor) {
+            streak += 1
+            guard let prev = calendar.date(byAdding: .day, value: -1, to: cursor) else { break }
+            cursor = prev
+        }
+        return TripStats(
+            totalMeters: total,
+            walkCount: tripLog.count,
+            longestMeters: longest,
+            currentStreakDays: streak
+        )
+    }
+
     /// True when (a) the user has shown enough engagement to deserve being
     /// asked, and (b) we haven't asked recently. The actual decision to
     /// show a prompt still belongs to iOS — this just gates our call to
@@ -160,6 +192,17 @@ final class UserDataStore {
         }
         return true
     }
+}
+
+struct TripStats: Hashable {
+    let totalMeters: Double
+    let walkCount: Int
+    let longestMeters: Double
+    let currentStreakDays: Int
+
+    var totalMiles: Double { totalMeters / 1609.344 }
+    var longestMiles: Double { longestMeters / 1609.344 }
+    var isEmpty: Bool { walkCount == 0 }
 }
 
 /// A completed walk. Persisted so users can look back at where they've been.
