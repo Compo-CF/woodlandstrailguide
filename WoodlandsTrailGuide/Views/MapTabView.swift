@@ -9,9 +9,11 @@ struct MapTabView: View {
     @Environment(LocationManager.self) private var locationManager
     @Environment(UserDataStore.self) private var userData
     @Environment(WeatherStore.self) private var weatherStore
+    @Environment(RoutingBridge.self) private var routingBridge
     @Environment(\.requestReview) private var requestReview
     @State private var showingWeather = false
     @State private var showingSearch = false
+    @State private var showingLoopBuilder = false
     /// First moment the user drifted outside `offRouteThreshold`. Cleared
     /// when they're back within range. When the drift persists past
     /// `offRouteDuration`, we silently recompute a new route from their
@@ -101,6 +103,15 @@ struct MapTabView: View {
                 .onChange(of: locationManager.location) { _, _ in
                     updateProgress(graph: graph)
                 }
+                .onChange(of: routingBridge.pending) { _, newValue in
+                    // Deep-link handoff — App parses the URL, sets pending;
+                    // we snap each coord to the nearest graph node and pop
+                    // the routing card so the user sees where they'd walk.
+                    if let request = newValue {
+                        applyPendingRoute(request, graph: graph)
+                        routingBridge.pending = nil
+                    }
+                }
                 .onChange(of: routeProgress?.isArrived ?? false) { wasArrived, isArrived in
                     // First time the user actually walks to a destination is
                     // the best possible moment to ask for a review.
@@ -127,6 +138,7 @@ struct MapTabView: View {
                     directionsToggle
                     mapStyleToggle
                     recenterButton
+                    loopButton
                 }
                 .padding(.top, 12)
                 .padding(.trailing, 12)
@@ -194,6 +206,28 @@ struct MapTabView: View {
                     latitude: newLoc.coordinate.latitude,
                     longitude: newLoc.coordinate.longitude
                 )
+            }
+        }
+        .sheet(isPresented: $showingLoopBuilder) {
+            if let graph = store.graph, let loc = locationManager.location {
+                LoopBuilderSheet(
+                    graph: graph,
+                    userLocation: loc,
+                    onGenerate: { startIdx, farIdx in
+                        // Load into the routing state — start == end with a
+                        // waypoint in between, so route(through:) generates
+                        // the loop via the existing update pipeline.
+                        clearRoute()
+                        routingMode = true
+                        waypointNodes = [farIdx]
+                        startNode = startIdx
+                        endNode = startIdx
+                    }
+                )
+                .presentationDetents([.medium])
+            } else {
+                LoopUnavailableSheet()
+                    .presentationDetents([.height(220)])
             }
         }
         .sheet(isPresented: $showingSearch) {
@@ -336,6 +370,24 @@ struct MapTabView: View {
             .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
         }
         .accessibilityLabel("Map style: \(userData.mapStyle.label). Tap to change.")
+    }
+
+    /// Generate a loop walk of a chosen distance from the user's location.
+    /// Uses waypoint routing under the hood — start = end, with a far
+    /// waypoint chosen at approximately target-distance / 2.
+    private var loopButton: some View {
+        Button {
+            showingLoopBuilder = true
+        } label: {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Natural.forest)
+                .frame(width: 44, height: 44)
+                .background(Natural.buttonBg, in: Circle())
+                .overlay(Circle().stroke(Natural.hairline, lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+        }
+        .accessibilityLabel("Generate a loop walk from your location")
     }
 
     /// Full-screen search covering trails, parks, and POIs.
@@ -494,13 +546,23 @@ struct MapTabView: View {
 
     private func routeSummaryCard(_ r: Router.Route) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(String(format: "%.2f mi", r.lengthMeters / 1609.344))
                     .font(.title3.bold().monospacedDigit())
                     .foregroundStyle(Natural.ink)
                 Text("• \(walkingTime(meters: r.lengthMeters)) walk")
                     .font(.subheadline).foregroundStyle(Natural.inkMuted)
                 Spacer()
+                if let graph = store.graph, let shareURL = buildShareURL(graph) {
+                    ShareLink(item: shareURL,
+                              subject: Text("Walk in The Woodlands"),
+                              message: Text(shareMessage(for: r))) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.title3)
+                            .foregroundStyle(Natural.forest)
+                    }
+                    .accessibilityLabel("Share this route")
+                }
                 Button {
                     clearRoute()
                 } label: {
@@ -789,6 +851,47 @@ struct MapTabView: View {
         addingWaypoint = false
     }
 
+    /// Build a woodlandstrailguide:// URL for the currently-computed route
+    /// so users can send it to another install of the app.
+    private func buildShareURL(_ graph: TrailGraph) -> URL? {
+        guard let s = startNode, let e = endNode,
+              s < graph.nodes.count, e < graph.nodes.count else { return nil }
+        let startCoord = graph.nodes[s].clCoord
+        let endCoord = graph.nodes[e].clCoord
+        let vias = waypointNodes.compactMap { i -> CLLocationCoordinate2D? in
+            guard i < graph.nodes.count else { return nil }
+            return graph.nodes[i].clCoord
+        }
+        return RoutingBridge.buildShareURL(start: startCoord, end: endCoord, waypoints: vias)
+    }
+
+    private func shareMessage(for r: Router.Route) -> String {
+        let miles = String(format: "%.2f", r.lengthMeters / 1609.344)
+        let time = walkingTime(meters: r.lengthMeters)
+        let firstLeg = r.namedSegments.first?.name
+        let lastLeg = r.namedSegments.last?.name
+        var msg = "A \(miles)-mile walk in The Woodlands — about \(time)."
+        if let firstLeg, let lastLeg, firstLeg != lastLeg {
+            msg += " Starts on \(firstLeg), ends on \(lastLeg)."
+        }
+        msg += " Open this link in Woodlands Trail Guide to route it."
+        return msg
+    }
+
+    /// Apply an incoming deep-link route request. Snaps each raw coordinate
+    /// to the nearest graph node and drops it into the routing state so the
+    /// summary card appears immediately.
+    private func applyPendingRoute(_ request: RoutingBridge.PendingRoute, graph: TrailGraph) {
+        let router = Router(graph: graph)
+        guard let s = router.nearestNode(to: request.start),
+              let e = router.nearestNode(to: request.end) else { return }
+        clearRoute()
+        routingMode = true
+        startNode = s
+        endNode = e
+        waypointNodes = request.waypoints.compactMap { router.nearestNode(to: $0) }
+    }
+
     private func clearRoute() {
         routingMode = false
         navigationActive = false
@@ -873,6 +976,32 @@ private struct POIChip: View {
         .padding(.horizontal, 10).padding(.vertical, 6)
         .background(Natural.chipBg,
                     in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+/// Fallback shown when the loop builder is invoked without a location fix.
+private struct LoopUnavailableSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "location.slash.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(Natural.route)
+            Text("Location needed for loops")
+                .font(.headline)
+                .foregroundStyle(Natural.ink)
+            Text("Loop generation starts from where you are. Grant location access, or move outside so your device can pick up a fix, then try again.")
+                .font(.callout)
+                .foregroundStyle(Natural.inkMuted)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+            Button("Got it") { dismiss() }
+                .buttonStyle(.borderedProminent)
+                .tint(Natural.forest)
+            Spacer()
+        }
+        .background(Natural.cardBg)
     }
 }
 

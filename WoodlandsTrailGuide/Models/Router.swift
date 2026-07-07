@@ -92,6 +92,43 @@ struct Router {
         let nodeIndex: Int
     }
 
+    /// Find a graph node approximately `targetMeters` away from `start` by
+    /// route distance (not straight-line). Used for loop generation:
+    /// `route(through: [start, farNode, start])` yields a walk of roughly
+    /// `2 * targetMeters` that goes out and back on the network.
+    ///
+    /// Runs a bounded Dijkstra (stops expanding at 1.5× target) and picks
+    /// the node whose distance is closest to the target.
+    func farthestNode(from start: Int, atRouteDistance target: Double) -> Int? {
+        let n = graph.nodes.count
+        guard start >= 0, start < n, target > 0 else { return nil }
+        var dist = [Double](repeating: .infinity, count: n)
+        dist[start] = 0
+        var heap = MinHeap<HeapEntry>()
+        heap.push(HeapEntry(node: start, dist: 0))
+        while let cur = heap.pop() {
+            if cur.dist > dist[cur.node] { continue }
+            if cur.dist > target * 1.5 { continue }
+            for edge in graph.adj[cur.node] {
+                let nd = cur.dist + edge.lengthMeters
+                if nd < dist[edge.neighbor] {
+                    dist[edge.neighbor] = nd
+                    heap.push(HeapEntry(node: edge.neighbor, dist: nd))
+                }
+            }
+        }
+        var bestIdx = -1
+        var bestDelta = Double.infinity
+        for i in 0..<n where dist[i].isFinite && i != start {
+            let delta = abs(dist[i] - target)
+            if delta < bestDelta {
+                bestDelta = delta
+                bestIdx = i
+            }
+        }
+        return bestIdx >= 0 ? bestIdx : nil
+    }
+
     /// Find the nearest node in the graph to an arbitrary point. Linear scan —
     /// fine at the current graph size; swap in a k-d tree if the graph grows.
     func nearestNode(to coord: CLLocationCoordinate2D) -> Int? {

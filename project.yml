@@ -40,7 +40,7 @@ targets:
       properties:
         CFBundleDisplayName: WTG
         CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "8"
+        CFBundleVersion: "9"
         CFBundleIconName: AppIcon
         UILaunchScreen:
           UIColorName: ""
@@ -51,6 +51,12 @@ targets:
         UIRequiredDeviceCapabilities:
           - armv7
         ITSAppUsesNonExemptEncryption: false
+        # Custom URL scheme for share-a-route deep links —
+        # woodlandstrailguide://route?start=…&end=…&via=…
+        CFBundleURLTypes:
+          - CFBundleURLName: com.compofelice.WoodlandsTrailGuide
+            CFBundleURLSchemes:
+              - woodlandstrailguide
         # Google AdMob — app-level App ID for Woodlands Trail Guide.
         # Banner ad unit ID lives in MapTabView.swift.
         GADApplicationIdentifier: ca-app-pub-1927040492403163~2388146729

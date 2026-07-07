@@ -9,6 +9,7 @@ struct WoodlandsTrailGuideApp: App {
     @State private var locationManager = LocationManager()
     @State private var userData = UserDataStore()
     @State private var weatherStore = WeatherStore()
+    @State private var routingBridge = RoutingBridge()
 
     init() {
         // Initialize Google Mobile Ads SDK. Ads start loading immediately;
@@ -24,6 +25,13 @@ struct WoodlandsTrailGuideApp: App {
                 .environment(locationManager)
                 .environment(userData)
                 .environment(weatherStore)
+                .environment(routingBridge)
+                .onOpenURL { url in
+                    // woodlandstrailguide://route?start=…&end=…&via=…
+                    if let pending = RoutingBridge.parse(url) {
+                        routingBridge.pending = pending
+                    }
+                }
                 .onChange(of: locationManager.location) { _, newValue in
                     store.userLocation = newValue
                 }
