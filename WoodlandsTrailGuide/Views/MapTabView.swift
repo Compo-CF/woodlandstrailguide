@@ -4,6 +4,11 @@ import StoreKit
 import UIKit
 
 struct MapTabView: View {
+    /// Incremented by ContentView whenever the user taps the "Route" tab in
+    /// the bottom tab bar. The tab acts as a shortcut into routing mode —
+    /// we watch this value and enter routing mode when it changes.
+    let routeIntent: Int
+
     @Environment(TrailStore.self) private var store
     @Environment(POIStore.self) private var poiStore
     @Environment(LocationManager.self) private var locationManager
@@ -106,6 +111,17 @@ struct MapTabView: View {
                 .onChange(of: waypointNodes) { _, _ in updateRoute(graph: graph) }
                 .onChange(of: locationManager.location) { _, _ in
                     updateProgress(graph: graph)
+                }
+                .onChange(of: routeIntent) { _, _ in
+                    // User tapped the Route tab in the tab bar. Enter routing
+                    // mode (or show the first-time intro sheet if they haven't
+                    // seen it). If they're already routing, no-op.
+                    guard !routingMode else { return }
+                    if !userData.hasSeenRoutingIntro {
+                        showingIntro = true
+                    } else {
+                        routingMode = true
+                    }
                 }
                 .onChange(of: routingBridge.pending) { _, newValue in
                     // Deep-link handoff — App parses the URL, sets pending;
