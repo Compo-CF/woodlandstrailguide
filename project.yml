@@ -40,7 +40,7 @@ targets:
       properties:
         CFBundleDisplayName: WTG
         CFBundleShortVersionString: "1.1"
-        CFBundleVersion: "2"
+        CFBundleVersion: "5"
         CFBundleIconName: AppIcon
         UILaunchScreen:
           UIColorName: ""
