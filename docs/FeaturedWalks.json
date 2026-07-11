@@ -1,0 +1,98 @@
+[
+  {
+    "id": "grogans-scenic-loop",
+    "name": "Grogan's Mill Scenic Loop",
+    "description": "A gentle 2-mile loop along Panther Branch that passes the Northshore boardwalk, three pedestrian bridges, and the sculpture garden at Millbend. Great starter walk if you're new to the pathway system.",
+    "village": "Grogan's Mill",
+    "park": "Northshore Park",
+    "difficulty": "easy",
+    "distanceMiles": 2.1,
+    "elevationGainFeet": 45,
+    "waypoints": [
+      { "lat": 30.1650, "lon": -95.4900, "note": "Trailhead at Millbend parking" },
+      { "lat": 30.1665, "lon": -95.4880, "note": "First pedestrian bridge" },
+      { "lat": 30.1690, "lon": -95.4870, "note": "Boardwalk over the lake" },
+      { "lat": 30.1650, "lon": -95.4900, "note": "Return to Millbend parking" }
+    ],
+    "highlights": [
+      "Waterfront views along Panther Branch",
+      "Wooden pedestrian bridge at the 0.5 mile mark",
+      "Sculpture garden at Millbend midway through the loop"
+    ],
+    "bestTime": "Morning or golden hour",
+    "seasonality": "Year-round, especially good in fall",
+    "curatedBy": "Anthony Compofelice"
+  },
+  {
+    "id": "creekside-park-family-friendly",
+    "name": "Creekside Park Family Loop",
+    "description": "Flat, stroller-friendly 1.4-mile loop through Creekside Park past the Rob Fleming amphitheater and the sports fields. Passes a playground and a splash pad in season.",
+    "village": "Creekside Park",
+    "park": "Rob Fleming Park",
+    "difficulty": "easy",
+    "distanceMiles": 1.4,
+    "elevationGainFeet": 15,
+    "waypoints": [
+      { "lat": 30.1710, "lon": -95.5560, "note": "Rob Fleming Park south lot" },
+      { "lat": 30.1730, "lon": -95.5540, "note": "Playground" },
+      { "lat": 30.1750, "lon": -95.5570, "note": "Sports fields" },
+      { "lat": 30.1710, "lon": -95.5560, "note": "Return" }
+    ],
+    "highlights": [
+      "Playground and splash pad along the route",
+      "Rob Fleming amphitheater (concerts in summer)",
+      "Wide, flat pathway — good for strollers and new walkers"
+    ],
+    "bestTime": "Late afternoon",
+    "seasonality": "All seasons; splash pad open in warmer months",
+    "curatedBy": "Anthony Compofelice"
+  },
+  {
+    "id": "sterling-ridge-forest-walk",
+    "name": "Sterling Ridge Forest Walk",
+    "description": "3.2 miles winding through Sterling Ridge under mature pine and oak canopy. Quieter than the eastern villages — you'll often have the trail to yourself.",
+    "village": "Sterling Ridge",
+    "park": null,
+    "difficulty": "moderate",
+    "distanceMiles": 3.2,
+    "elevationGainFeet": 80,
+    "waypoints": [
+      { "lat": 30.1990, "lon": -95.5820, "note": "Trailhead near Sterling Ridge Drive" },
+      { "lat": 30.2020, "lon": -95.5860, "note": "Forest section" },
+      { "lat": 30.2040, "lon": -95.5810, "note": "Ridge overlook" },
+      { "lat": 30.1990, "lon": -95.5820, "note": "Return" }
+    ],
+    "highlights": [
+      "Dense pine and oak canopy the whole way",
+      "Quieter than most Woodlands trails",
+      "Small overlook at the midpoint"
+    ],
+    "bestTime": "Anytime — shady even at midday",
+    "seasonality": "Best in spring and fall",
+    "curatedBy": "Anthony Compofelice"
+  },
+  {
+    "id": "town-center-waterway",
+    "name": "Town Center Waterway Stroll",
+    "description": "1.6 miles along The Woodlands Waterway with fountains, public art, and restaurants nearby. Great for an evening walk before dinner or a coffee stop.",
+    "village": "Town Center",
+    "park": null,
+    "difficulty": "easy",
+    "distanceMiles": 1.6,
+    "elevationGainFeet": 10,
+    "waypoints": [
+      { "lat": 30.1590, "lon": -95.4590, "note": "Waterway Square" },
+      { "lat": 30.1620, "lon": -95.4560, "note": "Cynthia Woods Pavilion" },
+      { "lat": 30.1650, "lon": -95.4620, "note": "Market Street" },
+      { "lat": 30.1590, "lon": -95.4590, "note": "Return to Waterway Square" }
+    ],
+    "highlights": [
+      "Waterway fountains at Waterway Square",
+      "Public art installations along the walk",
+      "Restaurants and cafes at Market Street"
+    ],
+    "bestTime": "Evening",
+    "seasonality": "Year-round; extra beautiful during holiday lights",
+    "curatedBy": "Anthony Compofelice"
+  }
+]

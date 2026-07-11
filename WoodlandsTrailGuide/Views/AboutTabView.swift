@@ -13,6 +13,43 @@ struct AboutTabView: View {
     private let fishingGuideURL = URL(string: "https://apps.apple.com/app/id6773501518")!
     private let supportURL = URL(string: "https://compo-cf.github.io/woodlandstrailguide/support.html")!
 
+    /// Prefilled mailto: link for community-submitted Featured Walk suggestions.
+    /// Users tap "Suggest a Featured Walk" -> compose a pre-templated email to
+    /// Anthony with the fields we need to add the walk to FeaturedWalks.json.
+    private var suggestWalkMailURL: URL {
+        let subject = "Featured Walk suggestion — Woodlands Trail Guide"
+        let body = """
+        Suggest a walk to add to Featured Walks in Woodlands Trail Guide.
+
+        Name of the walk:
+        (e.g. "Panther Creek Sunset Loop")
+
+        Where it starts and ends:
+        (parking lot, address, or approximate coordinates)
+
+        Approximate distance:
+
+        Difficulty (easy / moderate / strenuous):
+
+        What makes it special (highlights, views, features):
+        1.
+        2.
+        3.
+
+        Best time of day / season to walk it:
+
+        Anything else you want me to know:
+        """
+        var comps = URLComponents()
+        comps.scheme = "mailto"
+        comps.path = "anthony.compofelice@centricfiber.com"
+        comps.queryItems = [
+            .init(name: "subject", value: subject),
+            .init(name: "body", value: body)
+        ]
+        return comps.url ?? URL(string: "mailto:anthony.compofelice@centricfiber.com")!
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -227,6 +264,23 @@ struct AboutTabView: View {
                                 .foregroundStyle(Natural.ink)
                             Spacer()
                             Image(systemName: "arrow.up.right.square")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    Link(destination: suggestWalkMailURL) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "star.circle")
+                                .foregroundStyle(Natural.route)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Suggest a Featured Walk")
+                                    .foregroundStyle(Natural.ink)
+                                Text("Know a scenic route or hidden gem? Email me your suggestion.")
+                                    .font(.caption)
+                                    .foregroundStyle(Natural.inkMuted)
+                            }
+                            Spacer()
+                            Image(systemName: "envelope")
                                 .font(.caption)
                                 .foregroundStyle(.tertiary)
                         }

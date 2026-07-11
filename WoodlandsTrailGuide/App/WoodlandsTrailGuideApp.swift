@@ -13,6 +13,7 @@ struct WoodlandsTrailGuideApp: App {
     @State private var elevationService = ElevationService()
     @State private var poiPhotoStore = POIPhotoStore()
     @State private var iapStore = IAPStore()
+    @State private var featuredWalkStore = FeaturedWalkStore()
 
     init() {
         // Initialize Google Mobile Ads SDK. Ads start loading immediately;
@@ -32,6 +33,7 @@ struct WoodlandsTrailGuideApp: App {
                 .environment(elevationService)
                 .environment(poiPhotoStore)
                 .environment(iapStore)
+                .environment(featuredWalkStore)
                 .onOpenURL { url in
                     // woodlandstrailguide://route?start=…&end=…&via=…
                     if let pending = RoutingBridge.parse(url) {

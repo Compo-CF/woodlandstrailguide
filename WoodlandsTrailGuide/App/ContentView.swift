@@ -3,13 +3,17 @@ import StoreKit
 
 /// Root tab container.
 ///
-/// Four tabs: Map / Trails / Route / About. The Route tab is a shortcut —
-/// tapping it switches back to Map and increments `routeIntent`, which
-/// MapTabView watches to enter routing mode immediately. It never stays
-/// "selected" visually because we flip `selectedTab` back to .map inside
-/// the onChange handler.
+/// Five tabs: Map / Trails / Route / Featured / About.
+///
+/// - The **Route** tab is a shortcut, not a destination — tapping it switches
+///   back to Map and increments `routeIntent`, which MapTabView watches to
+///   enter routing mode immediately.
+/// - The **Featured** tab shows curator-managed walks. Tapping "Walk this
+///   route" inside a walk sheet sets `routingBridge.pending`, which this view
+///   also observes to flip back to Map so MapTabView can apply the route.
 struct ContentView: View {
     @Environment(UserDataStore.self) private var userData
+    @Environment(RoutingBridge.self) private var routingBridge
     @Environment(\.requestReview) private var requestReview
     @State private var showingOnboarding = false
     @State private var hasRecordedLaunch = false
@@ -19,7 +23,7 @@ struct ContentView: View {
     /// intro sheet).
     @State private var routeIntent: Int = 0
 
-    enum AppTab: Hashable { case map, trails, route, about }
+    enum AppTab: Hashable { case map, trails, route, featured, about }
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -29,14 +33,16 @@ struct ContentView: View {
             ListTabView()
                 .tag(AppTab.trails)
                 .tabItem { Label("Trails", systemImage: "list.bullet") }
-            // The Route tab is a shortcut, not a destination — the onChange
-            // handler flips selectedTab back to .map before this content
-            // ever renders. The Color.clear is a required placeholder.
+            // Route tab is a shortcut — the onChange handler flips
+            // selectedTab back to .map before this content ever renders.
             Color.clear
                 .tag(AppTab.route)
                 .tabItem {
                     Label("Route", systemImage: "point.topleft.down.to.point.bottomright.curvepath.fill")
                 }
+            FeaturedTabView()
+                .tag(AppTab.featured)
+                .tabItem { Label("Featured", systemImage: "star.circle") }
             AboutTabView()
                 .tag(AppTab.about)
                 .tabItem { Label("About", systemImage: "info.circle") }
@@ -45,6 +51,15 @@ struct ContentView: View {
             guard new == .route else { return }
             selectedTab = .map
             routeIntent &+= 1
+        }
+        .onChange(of: routingBridge.pending) { _, newValue in
+            // A pending route was set — from a deep link, or from the
+            // Featured Walk "Walk this route" button. Flip to the Map tab
+            // so MapTabView can apply it and the user actually sees the
+            // resulting route.
+            if newValue != nil {
+                selectedTab = .map
+            }
         }
         .sheet(isPresented: $showingOnboarding, onDismiss: {
             userData.hasSeenOnboarding = true
