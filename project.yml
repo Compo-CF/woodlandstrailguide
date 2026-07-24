@@ -48,9 +48,13 @@ targets:
         NSUserTrackingUsageDescription: Used to show relevant ads that help keep this app free and updated.
         NSPhotoLibraryUsageDescription: Used only when you tap "Add a photo" on a point of interest — photos stay on your device and are never uploaded.
         # v1.3: Apple Health sync (opt-in, off by default). We only ever
-        # WRITE completed-walk workouts, never read Health data — so only
-        # the Update/Share usage string is needed, no Share-read string.
+        # WRITE completed-walk workouts — HealthKitService.requestAuthorization
+        # passes an empty `read` set — but Apple's validator requires BOTH
+        # usage-description keys whenever the HealthKit entitlement is
+        # present at all, regardless of runtime behavior. Both keys are
+        # honest about the app never reading anything back.
         NSHealthUpdateUsageDescription: Used only if you turn on "Sync walks to Apple Health" in About — logs each completed walk as a workout.
+        NSHealthShareUsageDescription: This app never reads any data from Health — this permission is required by Apple whenever HealthKit is used at all, even write-only.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIRequiredDeviceCapabilities:
