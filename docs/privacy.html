@@ -30,7 +30,7 @@ strong { font-weight: 600; }
 <main>
   <p class="eyebrow">Woodlands Trail Guide</p>
   <h1>Privacy Policy</h1>
-  <p class="updated">Effective June 29, 2026</p>
+  <p class="updated">Effective [DATE OF v1.3 RELEASE]</p>
 
   <p>Woodlands Trail Guide is an independent iOS app built by Anthony Compofelice. This policy describes what the app collects, how it uses it, and what choices you have.</p>
 
@@ -39,19 +39,25 @@ strong { font-weight: 600; }
   <ul>
     <li><strong>Location.</strong> When you grant location permission, your device's GPS coordinates are used <em>on-device</em> to show your position on the map, find nearby trailheads, and follow your progress during walking navigation. Your location is never transmitted off your device, never logged, and never associated with any account.</li>
     <li><strong>Advertising identifier (IDFA).</strong> The app shows a small banner ad via Google AdMob to help support development. If you allow tracking via Apple's App Tracking Transparency prompt, Google AdMob may access your device's advertising identifier to personalize ads. If you deny tracking, AdMob serves only contextual (non-personalized) ads. AdMob's handling of this data is governed by <a href="https://policies.google.com/technologies/ads">Google's advertising privacy policy</a>.</li>
-    <li><strong>On-device settings.</strong> Your favorites, onboarding state, preferred map style, launch counter, and trip log live in iOS UserDefaults — locally on your device only. Uninstalling the app deletes them.</li>
+    <li><strong>On-device settings.</strong> Your favorites, onboarding state, preferred map style, travel mode, trip log, and achievement progress live in iOS UserDefaults — locally on your device only. Uninstalling the app deletes them.</li>
+    <li><strong>Community reports (trail conditions &amp; wildlife sightings).</strong> If you submit a trail condition report (e.g. "flooded," "muddy") or a wildlife sighting, that report — its category, your optional note, and the location it was pinned to — is stored in Apple's iCloud CloudKit public database so other users of the app can see it. <strong>These reports are anonymous</strong>: we do not attach your name, Apple ID, or any other identifier to a report. Reports are visible to other users for a limited time (14 days for trail conditions, 30 days for wildlife sightings) and then no longer surfaced. You can flag another user's report as objectionable or inaccurate from within the app; reports that accumulate enough flags are automatically hidden from everyone.</li>
+    <li><strong>Apple Health (optional).</strong> If you turn on "Sync walks to Apple Health" in the About tab, each completed walk or ride is logged to your device's Health app as a workout (activity type, duration, and distance only). This is <strong>off by default</strong>, requires your explicit permission via Apple's Health authorization prompt, and is <strong>write-only</strong> — the app never reads any data back out of Health.</li>
   </ul>
 
   <h2>What we do NOT collect</h2>
   <ul>
     <li>No accounts, no sign-up, no email address.</li>
     <li>No analytics SDK, no crash reporter, no usage tracking by us.</li>
-    <li>No contacts, photos, microphone, or motion data.</li>
-    <li>No server we operate stores any data about you.</li>
+    <li>No contacts, microphone, or motion data.</li>
+    <li>No server we operate stores any data about you — community reports live in Apple's CloudKit, not on infrastructure we run, and are never linked to your identity.</li>
   </ul>
 
   <h2>Third parties</h2>
-  <p>The only third party with access to any data from this app is <strong>Google AdMob</strong>, which serves the banner ad. AdMob receives standard ad-request metadata (device type, IP, IDFA if you allow tracking). It does not receive your location, your favorites, or anything else from this app.</p>
+  <p>Two third parties are involved in this app's data handling:</p>
+  <ul>
+    <li><strong>Google AdMob</strong> serves the banner ad. AdMob receives standard ad-request metadata (device type, IP, IDFA if you allow tracking). It does not receive your location, your favorites, or anything else from this app.</li>
+    <li><strong>Apple iCloud (CloudKit)</strong> stores community trail-condition and wildlife-sighting reports in its public database, and — only if you opt in — receives your completed-walk workouts via Apple Health. Both are governed by Apple's own privacy practices; we do not operate or have separate access to this infrastructure beyond what CloudKit's public database API provides.</li>
+  </ul>
 
   <h2>Where the trail data comes from</h2>
   <p>Trail geometry, names, parks, bridges, and amenities are sourced from <strong>The Woodlands Township GIS</strong>'s public ArcGIS REST services. This data is bundled with the app and refreshed periodically from a static mirror hosted on GitHub Pages. No personally identifiable information is sent or received during a data refresh — the app simply downloads a static JSON file.</p>

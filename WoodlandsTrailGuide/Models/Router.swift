@@ -152,8 +152,8 @@ struct Router {
 
     /// Dijkstra from `start` to `end`, minimizing total meters traversed.
     /// Returns nil if no path exists.
-    func route(from start: Int, to end: Int) -> Route? {
-        route(through: [start, end])
+    func route(from start: Int, to end: Int, avoidUnpaved: Bool = false) -> Route? {
+        route(through: [start, end], avoidUnpaved: avoidUnpaved)
     }
 
     /// Route through an ordered sequence of stops — [start, waypoint₁,
@@ -164,7 +164,14 @@ struct Router {
     ///
     /// Callers can also use this to produce loops (same start and end with
     /// a distant waypoint in between).
-    func route(through stops: [Int]) -> Route? {
+    ///
+    /// `avoidUnpaved` heavily penalizes (not excludes) natural-surface trail
+    /// edges — `graph.ways[wayIndex].kind == "trail"` — so the router still
+    /// always finds a route (falling back to unpaved if that's the only
+    /// connection) but strongly prefers the paved pathway network when a
+    /// paved alternative exists. For strollers/wheelchairs/anyone who wants
+    /// to stay off natural surface.
+    func route(through stops: [Int], avoidUnpaved: Bool = false) -> Route? {
         guard stops.count >= 2 else {
             if stops.count == 1 {
                 return Route(nodes: [stops[0]], lengthMeters: 0,
@@ -172,11 +179,15 @@ struct Router {
             }
             return nil
         }
+        let ways = graph.ways
+        let weight: (Int) -> Double = avoidUnpaved
+            ? { wayIndex in ways[wayIndex].kind == "trail" ? 8.0 : 1.0 }
+            : { _ in 1.0 }
         var combinedPath: [Int] = []
         var combinedEdgeWays: [Int] = []
         var totalMeters = 0.0
         for i in 0..<(stops.count - 1) {
-            guard let segment = _pathFrom(stops[i], to: stops[i + 1]) else {
+            guard let segment = _pathFrom(stops[i], to: stops[i + 1], weight: weight) else {
                 return nil
             }
             if combinedPath.isEmpty {
@@ -202,7 +213,14 @@ struct Router {
     /// The raw Dijkstra + reconstruction primitive shared by route(from:to:)
     /// and route(through:). Returns nil on unreachable, empty edges for a
     /// zero-length trip (start == end).
-    private func _pathFrom(_ start: Int, to end: Int)
+    ///
+    /// `weight` scales an edge's real length for the purpose of picking a
+    /// path ONLY — it's a per-wayIndex cost multiplier (e.g. penalize
+    /// unpaved trail edges). The returned `lengthMeters` is always the true
+    /// physical distance along the chosen path, recomputed separately from
+    /// the real edge lengths, so a caller weighting toward paved surfaces
+    /// still gets an honest mileage figure, not an inflated weighted cost.
+    private func _pathFrom(_ start: Int, to end: Int, weight: (Int) -> Double = { _ in 1.0 })
         -> (path: [Int], edgeWays: [Int], lengthMeters: Double)? {
         let n = graph.nodes.count
         guard start >= 0, start < n, end >= 0, end < n else { return nil }
@@ -222,7 +240,8 @@ struct Router {
             if cur.dist > dist[cur.node] { continue }
             if cur.node == end { break }
             for edge in graph.adj[cur.node] {
-                let nd = cur.dist + edge.lengthMeters
+                let cost = edge.lengthMeters * weight(edge.wayIndex)
+                let nd = cur.dist + cost
                 if nd < dist[edge.neighbor] {
                     dist[edge.neighbor] = nd
                     prev[edge.neighbor] = cur.node
@@ -243,7 +262,12 @@ struct Router {
         }
         path.reverse()
         edgeWays.reverse()
-        return (path: path, edgeWays: edgeWays, lengthMeters: dist[end])
+
+        var realMeters = 0.0
+        for i in 0..<(path.count - 1) {
+            realMeters += graph.adj[path[i]].first { $0.neighbor == path[i + 1] }?.lengthMeters ?? 0
+        }
+        return (path: path, edgeWays: edgeWays, lengthMeters: realMeters)
     }
 
     /// Walk the path edge by edge, group consecutive edges by name, emit one

@@ -21,6 +21,14 @@ struct MapTabView: View {
     @State private var showingWeather = false
     @State private var showingSearch = false
     @State private var showingLoopBuilder = false
+    @State private var showingConditionReport = false
+    @State private var showingWildlifeSighting = false
+    /// Wall-clock start of the active navigation session — used to compute
+    /// a real walk duration for the trip log + HealthKit workout on arrival.
+    @State private var navigationStartedAt: Date?
+    /// Set right after a walk completes if it earned any new achievements.
+    /// Drives a brief celebratory toast (dismisses itself after a few sec).
+    @State private var toastAchievement: Achievement?
     /// First moment the user drifted outside `offRouteThreshold`. Cleared
     /// when they're back within range. When the drift persists past
     /// `offRouteDuration`, we silently recompute a new route from their
@@ -137,13 +145,34 @@ struct MapTabView: View {
                     // the best possible moment to ask for a review.
                     if !wasArrived && isArrived {
                         userData.markRouteCompleted()
+                        let duration = navigationStartedAt.map { Date.now.timeIntervalSince($0) }
                         if let r = route {
                             userData.recordTrip(
                                 distanceMeters: r.lengthMeters,
                                 startLabel: r.namedSegments.first?.name ?? "Start",
-                                endLabel: r.namedSegments.last?.name ?? "Destination"
+                                endLabel: r.namedSegments.last?.name ?? "Destination",
+                                durationSeconds: duration,
+                                travelMode: userData.travelMode
                             )
+                            if userData.healthKitSyncEnabled {
+                                HealthKitService.shared.saveWorkout(
+                                    distanceMeters: r.lengthMeters,
+                                    durationSeconds: duration ?? (r.lengthMeters / 1609.344 / userData.travelMode.paceMph * 3600),
+                                    travelMode: userData.travelMode
+                                )
+                            }
                         }
+                        navigationStartedAt = nil
+
+                        let newlyEarned = userData.checkForNewAchievements(hasTipped: iapStore.tipCount > 0)
+                        if let first = newlyEarned.first {
+                            toastAchievement = first
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .seconds(3))
+                                toastAchievement = nil
+                            }
+                        }
+
                         if userData.eligibleForReviewRequest {
                             Task { @MainActor in
                                 try? await Task.sleep(for: .seconds(3))
@@ -159,6 +188,7 @@ struct MapTabView: View {
                     mapStyleToggle
                     recenterButton
                     loopButton
+                    moreMenuButton
                 }
                 .padding(.top, 12)
                 .padding(.trailing, 12)
@@ -202,6 +232,30 @@ struct MapTabView: View {
                     .frame(maxWidth: .infinity)
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
+
+                if let achievement = toastAchievement {
+                    VStack {
+                        HStack(spacing: 10) {
+                            Image(systemName: achievement.systemImage)
+                                .font(.subheadline.weight(.bold))
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("Achievement unlocked")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(.white.opacity(0.85))
+                                Text(achievement.title)
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .background(Natural.forest, in: Capsule())
+                        .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
+                        .padding(.top, 76)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
             } else {
                 loadingOrError
             }
@@ -210,6 +264,7 @@ struct MapTabView: View {
         .animation(.easeInOut(duration: 0.22), value: route != nil)
         .animation(.easeInOut(duration: 0.22), value: navigationActive)
         .animation(.easeInOut(duration: 0.28), value: showingReroutedToast)
+        .animation(.easeInOut(duration: 0.28), value: toastAchievement)
         .onAppear {
             locationManager.requestPermission()
             Task {
@@ -305,6 +360,16 @@ struct MapTabView: View {
         }) {
             RoutingIntroSheet()
                 .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showingConditionReport) {
+            TrailConditionSheet(
+                wayID: selectedWay?.pathwayID,
+                wayName: selectedWay?.name,
+                userLocation: locationManager.location
+            )
+        }
+        .sheet(isPresented: $showingWildlifeSighting) {
+            WildlifeSightingSheet(userLocation: locationManager.location)
         }
     }
 
@@ -408,6 +473,57 @@ struct MapTabView: View {
                 .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
         }
         .accessibilityLabel("Generate a loop walk from your location")
+    }
+
+    /// Travel mode, paved-route preference, and the two crowdsourced report
+    /// types — grouped into one menu so the top-right button stack doesn't
+    /// grow a new circle for each one.
+    private var moreMenuButton: some View {
+        Menu {
+            Menu {
+                ForEach(TravelMode.allCases, id: \.self) { mode in
+                    Button {
+                        userData.travelMode = mode
+                        userData.saveTravelMode()
+                    } label: {
+                        if userData.travelMode == mode {
+                            Label(mode.label, systemImage: "checkmark")
+                        } else {
+                            Text(mode.label)
+                        }
+                    }
+                }
+            } label: {
+                Label("Travel mode: \(userData.travelMode.label)", systemImage: userData.travelMode.systemImage)
+            }
+            Button {
+                userData.preferPavedRoutes.toggle()
+                userData.savePreferPavedRoutes()
+                if let graph = store.graph { updateRoute(graph: graph) }
+            } label: {
+                Label("Prefer paved paths", systemImage: userData.preferPavedRoutes ? "checkmark.circle.fill" : "circle")
+            }
+            Divider()
+            Button {
+                showingConditionReport = true
+            } label: {
+                Label("Report a trail condition", systemImage: "exclamationmark.triangle")
+            }
+            Button {
+                showingWildlifeSighting = true
+            } label: {
+                Label("Report a wildlife sighting", systemImage: "pawprint")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Natural.forest)
+                .frame(width: 44, height: 44)
+                .background(Natural.buttonBg, in: Circle())
+                .overlay(Circle().stroke(Natural.hairline, lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+        }
+        .accessibilityLabel("More options")
     }
 
     /// Full-screen search covering trails, parks, and POIs.
@@ -570,7 +686,7 @@ struct MapTabView: View {
                 Text(String(format: "%.2f mi", r.lengthMeters / 1609.344))
                     .font(.title3.bold().monospacedDigit())
                     .foregroundStyle(Natural.ink)
-                Text("• \(walkingTime(meters: r.lengthMeters)) walk")
+                Text("• \(travelTime(meters: r.lengthMeters)) \(userData.travelMode == .bike ? "ride" : "walk")")
                     .font(.subheadline).foregroundStyle(Natural.inkMuted)
                 Spacer()
                 if let graph = store.graph, let shareURL = buildShareURL(graph) {
@@ -759,10 +875,21 @@ struct MapTabView: View {
                 Text(String(format: "%.2f mi", remaining / 1609.344))
                     .font(.subheadline.weight(.semibold).monospacedDigit())
                     .foregroundStyle(Natural.ink)
-                Text("· \(walkingTime(meters: remaining)) remaining")
+                Text("· \(travelTime(meters: remaining)) remaining")
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(Natural.inkMuted)
                 Spacer()
+                if let graph = store.graph, let shareURL = buildShareURL(graph) {
+                    ShareLink(item: shareURL,
+                              subject: Text("Walking in The Woodlands"),
+                              message: Text(liveShareMessage(remaining: remaining))) {
+                        Image(systemName: "location.fill.viewfinder")
+                            .font(.subheadline)
+                            .foregroundStyle(Natural.forest)
+                            .padding(.horizontal, 6)
+                    }
+                    .accessibilityLabel("Share my live ETA")
+                }
                 Button {
                     clearRoute()
                 } label: {
@@ -806,7 +933,7 @@ struct MapTabView: View {
             return
         }
         let stops = [s] + waypointNodes + [e]
-        let r = Router(graph: graph).route(through: stops)
+        let r = Router(graph: graph).route(through: stops, avoidUnpaved: userData.preferPavedRoutes)
         route = r
         if let r, let catalog = poiStore.pois {
             let coords = r.nodes.map { graph.nodes[$0].clCoord }
@@ -860,6 +987,7 @@ struct MapTabView: View {
 
     private func startNavigation(graph: TrailGraph) {
         navigationActive = true
+        navigationStartedAt = .now
         // Compute initial progress so the banner shows real numbers from the
         // first frame instead of placeholder values pulled from the route.
         if let loc = locationManager.location, let r = route {
@@ -896,12 +1024,22 @@ struct MapTabView: View {
         return RoutingBridge.buildShareURL(start: startCoord, end: endCoord, waypoints: vias)
     }
 
+    /// Message for the live-ETA share button in the nav banner — shares
+    /// current progress + a rough finish estimate, not just the plan.
+    private func liveShareMessage(remaining: Double) -> String {
+        let miles = String(format: "%.2f", remaining / 1609.344)
+        let time = travelTime(meters: remaining)
+        let verb = userData.travelMode == .bike ? "riding" : "walking"
+        return "I'm currently \(verb) in The Woodlands — \(miles) mi and about \(time) left. Open this link in Woodlands Trail Guide to see the route."
+    }
+
     private func shareMessage(for r: Router.Route) -> String {
         let miles = String(format: "%.2f", r.lengthMeters / 1609.344)
-        let time = walkingTime(meters: r.lengthMeters)
+        let time = travelTime(meters: r.lengthMeters)
         let firstLeg = r.namedSegments.first?.name
         let lastLeg = r.namedSegments.last?.name
-        var msg = "A \(miles)-mile walk in The Woodlands — about \(time)."
+        let verb = userData.travelMode == .bike ? "ride" : "walk"
+        var msg = "A \(miles)-mile \(verb) in The Woodlands — about \(time)."
         if let firstLeg, let lastLeg, firstLeg != lastLeg {
             msg += " Starts on \(firstLeg), ends on \(lastLeg)."
         }
@@ -935,8 +1073,10 @@ struct MapTabView: View {
         routeProgress = nil
     }
 
-    private func walkingTime(meters: Double) -> String {
-        let minutes = meters / 1609.344 / 3.0 * 60.0
+    /// Duration estimate at the current travel mode's pace. Named generically
+    /// (not "walkingTime") since it now covers bike pace too.
+    private func travelTime(meters: Double) -> String {
+        let minutes = meters / 1609.344 / userData.travelMode.paceMph * 60.0
         if minutes < 1 { return "<1 min" }
         if minutes < 60 { return "\(Int(minutes.rounded())) min" }
         let h = Int(minutes) / 60

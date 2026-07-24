@@ -39,7 +39,7 @@ targets:
       path: WoodlandsTrailGuide/Info.plist
       properties:
         CFBundleDisplayName: WTG
-        CFBundleShortVersionString: "1.2"
+        CFBundleShortVersionString: "1.3"
         CFBundleVersion: "1"
         CFBundleIconName: AppIcon
         UILaunchScreen:
@@ -47,6 +47,10 @@ targets:
         NSLocationWhenInUseUsageDescription: Used to show your position on the trails and find nearby trailheads.
         NSUserTrackingUsageDescription: Used to show relevant ads that help keep this app free and updated.
         NSPhotoLibraryUsageDescription: Used only when you tap "Add a photo" on a point of interest — photos stay on your device and are never uploaded.
+        # v1.3: Apple Health sync (opt-in, off by default). We only ever
+        # WRITE completed-walk workouts, never read Health data — so only
+        # the Update/Share usage string is needed, no Share-read string.
+        NSHealthUpdateUsageDescription: Used only if you turn on "Sync walks to Apple Health" in About — logs each completed walk as a workout.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIRequiredDeviceCapabilities:
@@ -157,3 +161,17 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 7H5T5AR2X5
+    entitlements:
+      path: WoodlandsTrailGuide/WoodlandsTrailGuide.entitlements
+      properties:
+        # v1.3: CloudKit for trail condition reports + wildlife sightings.
+        # First CloudKit usage in this app — new container, never shared
+        # with any other app's container.
+        com.apple.developer.icloud-services:
+          - CloudKit
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.com.compofelice.WoodlandsTrailGuide
+        # v1.3: HealthKit — write-only (logging completed walks/rides as
+        # workouts). Xcode's automatic signing adds this capability to the
+        # App ID on first archive; no manual Developer Portal step needed.
+        com.apple.developer.healthkit: true

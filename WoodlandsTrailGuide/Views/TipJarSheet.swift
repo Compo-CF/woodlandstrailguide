@@ -6,6 +6,7 @@ import StoreKit
 /// show a thank-you alert.
 struct TipJarSheet: View {
     @Environment(IAPStore.self) private var iap
+    @Environment(UserDataStore.self) private var userData
     @Environment(\.dismiss) private var dismiss
 
     @State private var isProcessing = false
@@ -93,7 +94,10 @@ struct TipJarSheet: View {
                 isProcessing = true
                 let ok = await iap.purchase(product)
                 isProcessing = false
-                if ok { showingThanks = true }
+                if ok {
+                    showingThanks = true
+                    userData.checkForNewAchievements(hasTipped: true)
+                }
             }
         } label: {
             HStack(spacing: 12) {

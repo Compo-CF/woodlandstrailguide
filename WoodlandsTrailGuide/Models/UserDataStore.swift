@@ -12,6 +12,22 @@ final class UserDataStore {
     /// Log of successfully-completed walks (route arrived at destination).
     /// Newest first. Rendered on the About tab.
     var tripLog: [TripLogEntry] = []
+    /// Walk vs bike — changes the pace assumption used for every ETA/duration
+    /// display (route summary, nav banner, remaining-time). Doesn't change
+    /// the routed path itself (shared pathway network either way).
+    var travelMode: TravelMode = .walk
+    /// When on, routing penalizes natural-surface trail edges so the router
+    /// strongly prefers paved pathways — for strollers/wheelchairs/etc.
+    /// Still finds a route even if the only path is unpaved (penalty, not
+    /// exclusion), it just won't be picked when a paved alternative exists.
+    var preferPavedRoutes: Bool = false
+    /// Opt-in — off by default. When on, a completed walk is also logged to
+    /// Apple Health as an HKWorkout.
+    var healthKitSyncEnabled: Bool = false
+    /// Permanent record of which achievements have ever been earned. Unlike
+    /// the live stats that back them (streak in particular can drop back to
+    /// zero), once earned an achievement stays unlocked.
+    var celebratedAchievementIDs: Set<String> = []
 
     private let defaults = UserDefaults.standard
     private let favoritesKey = "favorites.v1"
@@ -20,6 +36,10 @@ final class UserDataStore {
     private let mapStyleKey = "mapStyle.v1"
     private let kofiLastShownKey = "kofiPromptLastShown.v1"
     private let tripLogKey = "tripLog.v1"
+    private let travelModeKey = "travelMode.v1"
+    private let preferPavedKey = "preferPavedRoutes.v1"
+    private let healthKitSyncKey = "healthKitSyncEnabled.v1"
+    private let celebratedAchievementsKey = "celebratedAchievementIDs.v1"
 
     init() {
         if let data = defaults.data(forKey: favoritesKey),
@@ -35,6 +55,16 @@ final class UserDataStore {
         if let data = defaults.data(forKey: tripLogKey),
            let entries = try? JSONDecoder().decode([TripLogEntry].self, from: data) {
             tripLog = entries
+        }
+        if let raw = defaults.string(forKey: travelModeKey),
+           let parsed = TravelMode(rawValue: raw) {
+            travelMode = parsed
+        }
+        preferPavedRoutes = defaults.bool(forKey: preferPavedKey)
+        healthKitSyncEnabled = defaults.bool(forKey: healthKitSyncKey)
+        if let data = defaults.data(forKey: celebratedAchievementsKey),
+           let arr = try? JSONDecoder().decode([String].self, from: data) {
+            celebratedAchievementIDs = Set(arr)
         }
     }
 
@@ -66,10 +96,48 @@ final class UserDataStore {
         if let data = try? JSONEncoder().encode(Array(favoriteWayIDs)) {
             defaults.set(data, forKey: favoritesKey)
         }
+        // Doesn't affect the "supporter" badge either way — that's checked
+        // with real tip status at the tip-purchase call site.
+        checkForNewAchievements(hasTipped: false)
     }
 
     func saveMapStyle() {
         defaults.set(mapStyle.rawValue, forKey: mapStyleKey)
+    }
+
+    func saveTravelMode() {
+        defaults.set(travelMode.rawValue, forKey: travelModeKey)
+    }
+
+    func savePreferPavedRoutes() {
+        defaults.set(preferPavedRoutes, forKey: preferPavedKey)
+    }
+
+    func saveHealthKitSyncEnabled() {
+        defaults.set(healthKitSyncEnabled, forKey: healthKitSyncKey)
+    }
+
+    // MARK: - Achievements
+
+    /// Diffs the achievements earnable from current stats against what's
+    /// already been celebrated, persists any new ones, and returns them
+    /// (newest-worthy first) so the caller can show a toast. Safe to call
+    /// often — e.g. after every favorite toggle or tip — since it's a no-op
+    /// when nothing new was earned.
+    @discardableResult
+    func checkForNewAchievements(hasTipped: Bool) -> [Achievement] {
+        let earned = Achievement.unlockedIDs(
+            stats: tripStats,
+            favoritesCount: favoriteWayIDs.count,
+            hasTipped: hasTipped
+        )
+        let fresh = earned.subtracting(celebratedAchievementIDs)
+        guard !fresh.isEmpty else { return [] }
+        celebratedAchievementIDs.formUnion(fresh)
+        if let data = try? JSONEncoder().encode(Array(celebratedAchievementIDs)) {
+            defaults.set(data, forKey: celebratedAchievementsKey)
+        }
+        return Achievement.all.filter { fresh.contains($0.id) }
     }
 
     // MARK: - Ko-fi support nudge
@@ -122,13 +190,16 @@ final class UserDataStore {
 
     // MARK: - Trip log
 
-    func recordTrip(distanceMeters: Double, startLabel: String, endLabel: String) {
+    func recordTrip(distanceMeters: Double, startLabel: String, endLabel: String,
+                     durationSeconds: Double? = nil, travelMode: TravelMode = .walk) {
         let entry = TripLogEntry(
             id: UUID(),
             date: .now,
             distanceMeters: distanceMeters,
             startLabel: startLabel,
-            endLabel: endLabel
+            endLabel: endLabel,
+            durationSeconds: durationSeconds,
+            travelMode: travelMode
         )
         tripLog.insert(entry, at: 0)
         // Cap to the most recent 100 to keep UserDefaults compact.
@@ -214,8 +285,71 @@ struct TripLogEntry: Codable, Hashable, Identifiable {
     let startLabel: String
     /// Name of the last named segment along the route.
     let endLabel: String
+    /// Wall-clock duration of the walk, in seconds. Optional (and decodes
+    /// gracefully via decodeIfPresent) since entries recorded before this
+    /// field existed don't have it.
+    let durationSeconds: Double?
+    /// Walk vs bike. Defaults to .walk on decode for pre-existing entries —
+    /// this field didn't exist before travel modes shipped.
+    let travelMode: TravelMode
+
+    init(id: UUID, date: Date, distanceMeters: Double, startLabel: String,
+         endLabel: String, durationSeconds: Double? = nil, travelMode: TravelMode = .walk) {
+        self.id = id
+        self.date = date
+        self.distanceMeters = distanceMeters
+        self.startLabel = startLabel
+        self.endLabel = endLabel
+        self.durationSeconds = durationSeconds
+        self.travelMode = travelMode
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, date, distanceMeters, startLabel, endLabel, durationSeconds, travelMode
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        date = try c.decode(Date.self, forKey: .date)
+        distanceMeters = try c.decode(Double.self, forKey: .distanceMeters)
+        startLabel = try c.decode(String.self, forKey: .startLabel)
+        endLabel = try c.decode(String.self, forKey: .endLabel)
+        durationSeconds = try c.decodeIfPresent(Double.self, forKey: .durationSeconds)
+        travelMode = try c.decodeIfPresent(TravelMode.self, forKey: .travelMode) ?? .walk
+    }
 
     var miles: Double { distanceMeters / 1609.344 }
+}
+
+/// Walk vs bike. Both route over the same shared pathway network — this
+/// only changes the pace assumption used for ETA/duration displays (and
+/// which HKWorkoutActivityType a synced walk is logged as).
+enum TravelMode: String, CaseIterable, Codable {
+    case walk
+    case bike
+
+    var label: String {
+        switch self {
+        case .walk: return "Walk"
+        case .bike: return "Bike"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .walk: return "figure.walk"
+        case .bike: return "figure.outdoor.cycle"
+        }
+    }
+
+    /// Assumed pace in miles per hour, used for every duration estimate.
+    var paceMph: Double {
+        switch self {
+        case .walk: return 3.0
+        case .bike: return 12.0
+        }
+    }
 }
 
 /// Map base-layer style. Mirrors MKMapConfiguration's three concrete subclasses.

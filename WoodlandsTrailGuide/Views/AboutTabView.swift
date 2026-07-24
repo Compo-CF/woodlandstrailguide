@@ -7,8 +7,10 @@ struct AboutTabView: View {
     @Environment(IAPStore.self) private var iap
     @State private var showingReport = false
     @State private var showingTipJar = false
+    @State private var showingAchievements = false
     @State private var isRestoring = false
     @State private var isPurchasingRemoveAds = false
+    @State private var isRequestingHealthKit = false
 
     private let fishingGuideURL = URL(string: "https://apps.apple.com/app/id6773501518")!
     private let supportURL = URL(string: "https://compo-cf.github.io/woodlandstrailguide/support.html")!
@@ -100,6 +102,23 @@ struct AboutTabView: View {
                             Divider().frame(height: 34)
                             StatCell(number: "\(stats.currentStreakDays)", label: stats.currentStreakDays == 1 ? "day streak" : "day streak")
                         }
+                        Button {
+                            showingAchievements = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "trophy.fill")
+                                    .foregroundStyle(Natural.forest)
+                                Text("Achievements")
+                                    .foregroundStyle(Natural.ink)
+                                Spacer()
+                                Text("\(userData.celebratedAchievementIDs.count)/\(Achievement.all.count)")
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(Natural.inkMuted)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
                     }
 
                     Section("Recent walks") {
@@ -137,6 +156,41 @@ struct AboutTabView: View {
                             .lineLimit(2)
                             .font(.caption)
                     }
+                }
+
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { userData.healthKitSyncEnabled },
+                        set: { newValue in
+                            if newValue {
+                                isRequestingHealthKit = true
+                                Task {
+                                    let granted = await HealthKitService.shared.requestAuthorization()
+                                    userData.healthKitSyncEnabled = granted
+                                    userData.saveHealthKitSyncEnabled()
+                                    isRequestingHealthKit = false
+                                }
+                            } else {
+                                userData.healthKitSyncEnabled = false
+                                userData.saveHealthKitSyncEnabled()
+                            }
+                        }
+                    )) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "heart.text.square.fill")
+                                .foregroundStyle(Natural.route)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Sync walks to Apple Health")
+                                    .foregroundStyle(Natural.ink)
+                                Text("Each completed walk is logged as a workout.")
+                                    .font(.caption)
+                                    .foregroundStyle(Natural.inkMuted)
+                            }
+                        }
+                    }
+                    .disabled(isRequestingHealthKit)
+                } header: {
+                    Text("Apple Health")
                 }
 
                 Section("Support the developer") {
@@ -299,6 +353,9 @@ struct AboutTabView: View {
             }
             .sheet(isPresented: $showingTipJar) {
                 TipJarSheet()
+            }
+            .sheet(isPresented: $showingAchievements) {
+                AchievementsSheet()
             }
         }
     }
