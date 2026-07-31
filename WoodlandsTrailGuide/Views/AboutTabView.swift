@@ -12,7 +12,9 @@ struct AboutTabView: View {
     @State private var isPurchasingRemoveAds = false
     @State private var isRequestingHealthKit = false
 
-    private let fishingGuideURL = URL(string: "https://apps.apple.com/app/id6773501518")!
+    private let fishingGuideURL = URL(string: "https://apps.apple.com/app/the-woodlands-fishing-guide/id6773332173")!
+    private let stierEatsURL = URL(string: "https://apps.apple.com/app/id6773501518")!
+    private let cosmicaURL = URL(string: "https://apps.apple.com/app/id6784340038")!
     private let supportURL = URL(string: "https://compo-cf.github.io/woodlandstrailguide/support.html")!
 
     /// Prefilled mailto: link for community-submitted Featured Walk suggestions.
@@ -52,6 +54,33 @@ struct AboutTabView: View {
         return comps.url ?? URL(string: "mailto:anthony.compofelice@centricfiber.com")!
     }
 
+    /// One row in the "Also from this developer" cross-promo section.
+    private func developerAppRow(icon: String, tint: Color, name: String, tagline: String, url: URL) -> some View {
+        Link(destination: url) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(tint, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Natural.ink)
+                    Text(tagline)
+                        .font(.caption)
+                        .foregroundStyle(Natural.inkMuted)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right.square")
+                    .font(.footnote)
+                    .foregroundStyle(Natural.inkMuted)
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -61,32 +90,27 @@ struct AboutTabView: View {
                 }
 
                 Section("Also from this developer") {
-                    Link(destination: fishingGuideURL) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "fish.fill")
-                                .font(.title3)
-                                .foregroundStyle(.white)
-                                .frame(width: 42, height: 42)
-                                .background(
-                                    Color(red: 0.04, green: 0.42, blue: 0.45),
-                                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                )
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("The Woodlands Fishing Guide")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(Natural.ink)
-                                Text("The same trail-guide treatment for 80+ fishing spots across Montgomery County.")
-                                    .font(.caption)
-                                    .foregroundStyle(Natural.inkMuted)
-                                    .lineLimit(2)
-                            }
-                            Spacer(minLength: 0)
-                            Image(systemName: "arrow.up.right.square")
-                                .font(.footnote)
-                                .foregroundStyle(Natural.inkMuted)
-                        }
-                        .padding(.vertical, 2)
-                    }
+                    developerAppRow(
+                        icon: "fish.fill",
+                        tint: Color(red: 0.04, green: 0.42, blue: 0.45),
+                        name: "The Woodlands Fishing Guide",
+                        tagline: "The same trail-guide treatment for 80+ fishing spots across Montgomery County.",
+                        url: fishingGuideURL
+                    )
+                    developerAppRow(
+                        icon: "fork.knife",
+                        tint: Color(red: 0.72, green: 0.16, blue: 0.14),
+                        name: "S-Tier Eats",
+                        tagline: "Rank restaurants across The Woodlands & Spring — S/A/B/C/F, no five-star blob.",
+                        url: stierEatsURL
+                    )
+                    developerAppRow(
+                        icon: "sparkles",
+                        tint: Color(red: 0.24, green: 0.12, blue: 0.46),
+                        name: "Cosmica: Idle Universe",
+                        tagline: "Build a cosmic observatory empire in this idle discovery game.",
+                        url: cosmicaURL
+                    )
                 }
 
                 if !userData.tripLog.isEmpty {

@@ -16,6 +16,8 @@ struct ContentView: View {
     @Environment(RoutingBridge.self) private var routingBridge
     @Environment(\.requestReview) private var requestReview
     @State private var showingOnboarding = false
+    @State private var showingKofiPrompt = false
+    @State private var showingTipJar = false
     @State private var hasRecordedLaunch = false
     @State private var selectedTab: AppTab = .map
     /// Bumped whenever the user taps the Route tab. MapTabView's .onChange
@@ -66,6 +68,15 @@ struct ContentView: View {
         }) {
             OnboardingSheet()
         }
+        .alert("Enjoying the app?", isPresented: $showingKofiPrompt) {
+            Button("Maybe later", role: .cancel) {}
+            Button("Send a tip") { showingTipJar = true }
+        } message: {
+            Text("Woodlands Trail Guide is built and maintained by one local on weekends. If it's been useful, consider sending a tip to help keep it going.")
+        }
+        .sheet(isPresented: $showingTipJar) {
+            TipJarSheet()
+        }
         .onAppear {
             guard !hasRecordedLaunch else { return }
             hasRecordedLaunch = true
@@ -73,19 +84,26 @@ struct ContentView: View {
             if !userData.hasSeenOnboarding {
                 showingOnboarding = true
             } else {
-                considerReviewPrompt()
+                considerEngagementPrompts()
             }
         }
     }
 
-    /// On a returning user's cold launch (3+ launches and 30+ days since the
-    /// last ask), let iOS decide whether to show the native review prompt.
-    private func considerReviewPrompt() {
+    /// On a returning user's cold launch, consider the two engagement
+    /// prompts we have — the native review request and the Ko-fi tip
+    /// nudge — giving the review request priority so we never show both
+    /// on the same launch. (3+ launches and 30+ days since the last ask
+    /// for review; 10+ launches or 3+ favorites and 45+ days since the
+    /// last ask for the tip nudge — see UserDataStore for exact gating.)
+    private func considerEngagementPrompts() {
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(2))
             if userData.appLaunches >= 3 && userData.eligibleForReviewRequest {
                 requestReview()
                 userData.markReviewRequested()
+            } else if userData.shouldShowKofiPrompt {
+                showingKofiPrompt = true
+                userData.markKofiPromptShown()
             }
         }
     }

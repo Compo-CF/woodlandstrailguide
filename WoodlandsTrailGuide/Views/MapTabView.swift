@@ -427,10 +427,7 @@ struct MapTabView: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(routingMode ? .white : Natural.forest)
                 .frame(width: 44, height: 44)
-                .background(routingMode ? Natural.route : Natural.buttonBg,
-                            in: Circle())
-                .overlay(Circle().stroke(Natural.hairline, lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                .mapControlChrome(Circle(), fill: routingMode ? Natural.route : Natural.buttonBg)
         }
         .accessibilityLabel(routingMode ? "Exit directions" : "Get directions")
     }
@@ -450,9 +447,7 @@ struct MapTabView: View {
             }
             .foregroundStyle(Natural.forest)
             .frame(width: 44, height: 44)
-            .background(Natural.buttonBg, in: Circle())
-            .overlay(Circle().stroke(Natural.hairline, lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+            .mapControlChrome(Circle())
         }
         .accessibilityLabel("Map style: \(userData.mapStyle.label). Tap to change.")
     }
@@ -468,9 +463,7 @@ struct MapTabView: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Natural.forest)
                 .frame(width: 44, height: 44)
-                .background(Natural.buttonBg, in: Circle())
-                .overlay(Circle().stroke(Natural.hairline, lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                .mapControlChrome(Circle())
         }
         .accessibilityLabel("Generate a loop walk from your location")
     }
@@ -519,9 +512,7 @@ struct MapTabView: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(Natural.forest)
                 .frame(width: 44, height: 44)
-                .background(Natural.buttonBg, in: Circle())
-                .overlay(Circle().stroke(Natural.hairline, lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                .mapControlChrome(Circle())
         }
         .accessibilityLabel("More options")
     }
@@ -535,9 +526,7 @@ struct MapTabView: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Natural.forest)
                 .frame(width: 44, height: 44)
-                .background(Natural.buttonBg, in: Circle())
-                .overlay(Circle().stroke(Natural.hairline, lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                .mapControlChrome(Circle())
         }
         .accessibilityLabel("Search trails, parks, and amenities")
     }
@@ -554,9 +543,7 @@ struct MapTabView: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Natural.forest)
                 .frame(width: 44, height: 44)
-                .background(Natural.buttonBg, in: Circle())
-                .overlay(Circle().stroke(Natural.hairline, lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                .mapControlChrome(Circle())
         }
         .accessibilityLabel("Recenter on my location")
     }

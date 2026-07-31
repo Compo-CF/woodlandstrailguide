@@ -29,10 +29,13 @@ enum Natural {
 
     /// Map-control buttons (directions, map style) sitting on the map surface.
     /// Slightly cooler / cleaner than `cardBg` so they read as controls.
+    /// Fully opaque (unlike `cardBg`'s intentional translucency) — these
+    /// sit directly on the map, often over satellite imagery, and any
+    /// see-through washes out the control against busy tiles.
     static let buttonBg = Color(uiColor: UIColor { tc in
         tc.userInterfaceStyle == .dark
-            ? UIColor(red: 0.115, green: 0.175, blue: 0.135, alpha: 0.96)
-            : UIColor(red: 0.985, green: 0.965, blue: 0.910, alpha: 0.96)
+            ? UIColor(red: 0.115, green: 0.175, blue: 0.135, alpha: 1.0)
+            : UIColor(red: 0.985, green: 0.965, blue: 0.910, alpha: 1.0)
     })
 
     // MARK: - Strokes / borders
@@ -41,6 +44,18 @@ enum Natural {
         tc.userInterfaceStyle == .dark
             ? UIColor(white: 1.0, alpha: 0.08)
             : UIColor(red: 0.30, green: 0.26, blue: 0.18, alpha: 0.13)
+    })
+
+    /// A meaningfully more visible border than `hairline` — used for
+    /// controls that float directly on the map (buttons, weather pill).
+    /// `hairline` is deliberately subtle for cards resting on a cream
+    /// background; those same values nearly disappear against busy or
+    /// bright map tiles (satellite imagery especially), so map-floating
+    /// chrome needs its own, higher-contrast border.
+    static let controlBorder = Color(uiColor: UIColor { tc in
+        tc.userInterfaceStyle == .dark
+            ? UIColor(white: 1.0, alpha: 0.24)
+            : UIColor(red: 0.30, green: 0.26, blue: 0.18, alpha: 0.38)
     })
 
     // MARK: - Ink
@@ -82,4 +97,19 @@ enum Natural {
     /// Off-white used inside waypoint and POI pin rings. Slightly warm so
     /// the markers don't look stark against the cream-leaning UI.
     static let pinRingUI = UIColor(red: 0.985, green: 0.970, blue: 0.935, alpha: 1.0)
+}
+
+extension View {
+    /// Chrome for controls that float directly on the map — the directions/
+    /// map-style/recenter/loop/more/search buttons and the weather pill.
+    /// A fully opaque background, a crisp visible border, and a real drop
+    /// shadow, so the control clearly reads as "floating above the map"
+    /// regardless of what's underneath (satellite imagery in particular
+    /// otherwise washes out a subtler background/border combo).
+    func mapControlChrome<S: Shape>(_ shape: S, fill: Color = Natural.buttonBg) -> some View {
+        self
+            .background(fill, in: shape)
+            .overlay(shape.stroke(Natural.controlBorder, lineWidth: 1.25))
+            .shadow(color: .black.opacity(0.28), radius: 6, y: 3)
+    }
 }

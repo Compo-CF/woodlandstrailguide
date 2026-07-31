@@ -18,17 +18,13 @@ struct WeatherPill: View {
                 }
                 .foregroundStyle(Natural.forest)
                 .padding(.horizontal, 12).padding(.vertical, 9)
-                .background(Natural.buttonBg, in: Capsule())
-                .overlay(Capsule().stroke(Natural.hairline, lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                .mapControlChrome(Capsule())
             } else {
                 Image(systemName: "cloud")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Natural.inkMuted)
                     .frame(width: 44, height: 34)
-                    .background(Natural.buttonBg, in: Capsule())
-                    .overlay(Capsule().stroke(Natural.hairline, lineWidth: 0.5))
-                    .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                    .mapControlChrome(Capsule())
             }
         }
         .accessibilityLabel(snapshot?.summary ?? "Weather unavailable")
