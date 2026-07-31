@@ -39,7 +39,7 @@ targets:
       path: WoodlandsTrailGuide/Info.plist
       properties:
         CFBundleDisplayName: WTG
-        CFBundleShortVersionString: "1.3"
+        CFBundleShortVersionString: "1.3.1"
         CFBundleVersion: "1"
         CFBundleIconName: AppIcon
         UILaunchScreen:

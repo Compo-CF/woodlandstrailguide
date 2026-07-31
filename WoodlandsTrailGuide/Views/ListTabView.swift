@@ -1,18 +1,25 @@
 import SwiftUI
 
-/// A grouped, searchable list of named trails. Unnamed connector segments
-/// are aggregated by village so the list stays usable; tap a village to see
-/// what's there.
+/// A grouped, searchable list of named trails, sectioned by village/park/
+/// system. The Township GIS data splits most named trails into many small
+/// Way segments, so rows are grouped by name (NamedTrailGroup) rather than
+/// listed one-per-segment — a trail with several segments shows one row
+/// with the combined distance and drills into TrailSegmentsSheet; a
+/// single-segment trail (the common case) goes straight to
+/// TrailDetailSheet, same as before this grouping existed.
 ///
 /// Favorites: the toolbar heart toggles a "favorites only" filter. When on,
 /// only trails the user has hearted from `TrailDetailSheet` are shown, in
 /// their own single section. When off, favorites still appear at the top
-/// of the normal grouping so they're easy to find.
+/// of the normal grouping so they're easy to find. The favorites section
+/// stays per-segment (not grouped by name) since favoriting is itself a
+/// per-segment action.
 struct ListTabView: View {
     @Environment(TrailStore.self) private var store
     @Environment(UserDataStore.self) private var userData
     @State private var search = ""
     @State private var selectedWay: TrailGraph.Way?
+    @State private var selectedGroup: NamedTrailGroup?
     @State private var favoritesOnly = false
 
     var body: some View {
@@ -39,6 +46,9 @@ struct ListTabView: View {
             }
             .sheet(item: $selectedWay) { way in
                 TrailDetailSheet(way: way)
+            }
+            .sheet(item: $selectedGroup) { group in
+                TrailSegmentsSheet(group: group)
             }
         }
     }
@@ -70,10 +80,10 @@ struct ListTabView: View {
                         }
                     }
                 }
-                ForEach(groups, id: \.title) { group in
-                    Section(group.title) {
-                        ForEach(group.ways) { way in
-                            trailRow(way: way)
+                ForEach(groups, id: \.title) { bucket in
+                    Section(bucket.title) {
+                        ForEach(bucket.groups) { group in
+                            trailGroupRow(group: group)
                         }
                     }
                 }
@@ -107,6 +117,50 @@ struct ListTabView: View {
         }
     }
 
+    /// One row per distinct trail NAME, not per raw Way segment — the
+    /// Township data splits most named trails into many small segments,
+    /// which used to show up as a run of identical-looking rows with no
+    /// way to tell them apart. Shows the combined distance across every
+    /// segment; single-segment trails (the common case) skip the extra
+    /// drill-down tap and go straight to TrailDetailSheet, same as before.
+    private func trailGroupRow(group: NamedTrailGroup) -> some View {
+        Button {
+            if group.ways.count == 1 {
+                selectedWay = group.ways[0]
+            } else {
+                selectedGroup = group
+            }
+        } label: {
+            HStack {
+                if group.ways.contains(where: { userData.isFavorite($0.id) }) {
+                    Image(systemName: "heart.fill")
+                        .font(.caption)
+                        .foregroundStyle(Natural.route)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(group.name)
+                        .foregroundStyle(.primary)
+                    if group.ways.count > 1 {
+                        Text("\(group.ways.count) segments")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if let s = group.ways[0].surface {
+                        Text(s.capitalized).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                Text(String(format: "%.2f mi", group.totalMeters / 1609.344))
+                    .foregroundStyle(.secondary)
+                    .font(.subheadline.monospacedDigit())
+                if group.ways.count > 1 {
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
+
     private var emptyFavoritesState: some View {
         VStack(spacing: 12) {
             Image(systemName: "heart.slash")
@@ -125,7 +179,7 @@ struct ListTabView: View {
         .padding()
     }
 
-    private struct TrailBucket { let title: String; let ways: [TrailGraph.Way] }
+    private struct TrailBucket { let title: String; let groups: [NamedTrailGroup] }
 
     /// Named ways matching the search query.
     private func matching(graph: TrailGraph, query: String) -> [TrailGraph.Way] {
@@ -152,7 +206,32 @@ struct ListTabView: View {
             buckets[key, default: []].append(w)
         }
         return buckets
-            .map { TrailBucket(title: $0.key, ways: $0.value.sorted { ($0.name ?? "") < ($1.name ?? "") }) }
+            .map { key, ways in TrailBucket(title: key, groups: namedGroups(from: ways)) }
             .sorted { $0.title < $1.title }
     }
+
+    /// Collapses every Way sharing the same name into one NamedTrailGroup.
+    /// `matching()` already filters to named ways only, so `name` is always
+    /// non-nil here.
+    private func namedGroups(from ways: [TrailGraph.Way]) -> [NamedTrailGroup] {
+        var byName: [String: [TrailGraph.Way]] = [:]
+        for w in ways {
+            byName[w.name ?? "", default: []].append(w)
+        }
+        return byName
+            .map { NamedTrailGroup(name: $0.key, ways: $0.value) }
+            .sorted { $0.name < $1.name }
+    }
+}
+
+/// One or more Way segments that share a display name — the Township GIS
+/// data routinely splits a single named trail into many small segments.
+struct NamedTrailGroup: Identifiable, Hashable {
+    let name: String
+    let ways: [TrailGraph.Way]
+    var id: String { name }
+    var totalMeters: Double { ways.reduce(0) { $0 + $1.lengthMeters } }
+
+    static func == (lhs: NamedTrailGroup, rhs: NamedTrailGroup) -> Bool { lhs.name == rhs.name }
+    func hash(into hasher: inout Hasher) { hasher.combine(name) }
 }
