@@ -33,7 +33,12 @@ final class HealthKitService {
     /// so errors are swallowed rather than surfaced.
     func saveWorkout(distanceMeters: Double, durationSeconds: Double, travelMode: TravelMode) {
         guard HKHealthStore.isHealthDataAvailable() else { return }
-        let activityType: HKWorkoutActivityType = travelMode == .bike ? .cycling : .walking
+        let activityType: HKWorkoutActivityType
+        switch travelMode {
+        case .bike:         activityType = .cycling
+        case .jog, .run:    activityType = .running
+        case .walk:         activityType = .walking
+        }
         let end = Date()
         let start = end.addingTimeInterval(-max(durationSeconds, 1))
         let distanceQuantity = HKQuantity(unit: .meter(), doubleValue: distanceMeters)

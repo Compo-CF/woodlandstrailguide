@@ -20,7 +20,7 @@ struct MapTabView: View {
     @Environment(\.requestReview) private var requestReview
     @State private var showingWeather = false
     @State private var showingSearch = false
-    @State private var showingLoopBuilder = false
+    @State private var showingRoutePlanner = false
     @State private var showingConditionReport = false
     @State private var showingWildlifeSighting = false
     /// Wall-clock start of the active navigation session — used to compute
@@ -56,6 +56,13 @@ struct MapTabView: View {
     /// True while the user has tapped "+ Waypoint" and the next map tap
     /// should append to `waypointNodes` instead of touching start/end.
     @State private var addingWaypoint = false
+    /// Set when the active route came from the route planner (a distance/
+    /// time target) rather than plain tap-to-route. Nil for normal routing.
+    /// Read by updateRoute(graph:) so surface toggles and off-route
+    /// reroutes keep recomputing consistently with the original plan —
+    /// cleared by clearRoute() and routeToPOI() whenever a fresh, un-
+    /// planned route begins.
+    @State private var activePlan: RoutePlan?
     @State private var route: Router.Route?
     @State private var routePOIs: [POIAlongRoute] = []
 
@@ -187,7 +194,7 @@ struct MapTabView: View {
                     directionsToggle
                     mapStyleToggle
                     recenterButton
-                    loopButton
+                    plannerButton
                     moreMenuButton
                 }
                 .padding(.top, 12)
@@ -283,23 +290,27 @@ struct MapTabView: View {
                 )
             }
         }
-        .sheet(isPresented: $showingLoopBuilder) {
+        .sheet(isPresented: $showingRoutePlanner) {
             if let graph = store.graph, let loc = locationManager.location {
-                LoopBuilderSheet(
+                RoutePlannerSheet(
                     graph: graph,
                     userLocation: loc,
-                    onGenerate: { startIdx, farIdx in
+                    onGenerate: { startIdx, farIdx, plan in
                         // Load into the routing state — start == end with a
-                        // waypoint in between, so route(through:) generates
-                        // the loop via the existing update pipeline.
+                        // waypoint in between — so updateRoute(graph:) can
+                        // build the planned route (loop or surface-aware
+                        // out-and-back) via the existing update pipeline.
                         clearRoute()
                         routingMode = true
                         waypointNodes = [farIdx]
                         startNode = startIdx
                         endNode = startIdx
+                        activePlan = plan
+                        userData.travelMode = plan.activity
+                        userData.saveTravelMode()
                     }
                 )
-                .presentationDetents([.medium])
+                .presentationDetents([.large])
             } else {
                 LoopUnavailableSheet()
                     .presentationDetents([.height(220)])
@@ -452,20 +463,21 @@ struct MapTabView: View {
         .accessibilityLabel("Map style: \(userData.mapStyle.label). Tap to change.")
     }
 
-    /// Generate a loop walk of a chosen distance from the user's location.
-    /// Uses waypoint routing under the hood — start = end, with a far
-    /// waypoint chosen at approximately target-distance / 2.
-    private var loopButton: some View {
+    /// Open the route planner — generate a walk/jog/run of a chosen
+    /// distance or time from the user's location. Uses waypoint routing
+    /// under the hood — start = end, with a far waypoint chosen at
+    /// approximately target-distance / 2 — see updateRoute(graph:).
+    private var plannerButton: some View {
         Button {
-            showingLoopBuilder = true
+            showingRoutePlanner = true
         } label: {
-            Image(systemName: "arrow.triangle.2.circlepath")
+            Image(systemName: "figure.run")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Natural.forest)
                 .frame(width: 44, height: 44)
                 .mapControlChrome(Circle())
         }
-        .accessibilityLabel("Generate a loop walk from your location")
+        .accessibilityLabel("Plan a walk, jog, or run from your location")
     }
 
     /// Travel mode, paved-route preference, and the two crowdsourced report
@@ -673,7 +685,7 @@ struct MapTabView: View {
                 Text(String(format: "%.2f mi", r.lengthMeters / 1609.344))
                     .font(.title3.bold().monospacedDigit())
                     .foregroundStyle(Natural.ink)
-                Text("• \(travelTime(meters: r.lengthMeters)) \(userData.travelMode == .bike ? "ride" : "walk")")
+                Text("• \(travelTime(meters: r.lengthMeters)) \(userData.travelMode.noun)")
                     .font(.subheadline).foregroundStyle(Natural.inkMuted)
                 Spacer()
                 if let graph = store.graph, let shareURL = buildShareURL(graph) {
@@ -694,6 +706,18 @@ struct MapTabView: View {
                         .foregroundStyle(Natural.inkMuted)
                 }
                 .accessibilityLabel("Clear route")
+            }
+
+            if let plan = activePlan {
+                HStack(spacing: 5) {
+                    Image(systemName: plan.shape.systemImage)
+                    Text("Planned \(String(format: "%.1f", plan.targetMeters / 1609.344)) mi \(plan.shape.label.lowercased())")
+                    if plan.surfacePreference != .any {
+                        Text("· \(plan.surfacePreference.label)")
+                    }
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Natural.forest)
             }
 
             if !r.namedSegments.isEmpty {
@@ -787,9 +811,9 @@ struct MapTabView: View {
                     startNavigation(graph: store.graph!)
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "figure.walk")
+                        Image(systemName: userData.travelMode.systemImage)
                             .font(.subheadline.weight(.bold))
-                        Text("Start walking")
+                        Text("Start \(userData.travelMode.gerund)")
                             .font(.subheadline.weight(.semibold))
                     }
                     .foregroundStyle(.white)
@@ -919,8 +943,23 @@ struct MapTabView: View {
             routeProgress = nil
             return
         }
-        let stops = [s] + waypointNodes + [e]
-        let r = Router(graph: graph).route(through: stops, avoidUnpaved: userData.preferPavedRoutes)
+        let router = Router(graph: graph)
+        let r: Router.Route?
+        if let plan = activePlan, plan.shape == .loop, s == e, waypointNodes.count == 1 {
+            // Planner loop: build a genuine loop (different path back) via
+            // the discourage-based Dijkstra, instead of the plain through-
+            // route Dijkstra below (which would just retrace the same
+            // edges both ways).
+            r = router.loopRoute(from: s, viaFar: waypointNodes[0], surfacePreference: plan.surfacePreference)
+        } else if let plan = activePlan {
+            // Planner out-and-back (or a loop that's degraded — e.g. after
+            // an off-route reroute dropped the waypoint): plain through-
+            // route, but honoring the plan's own surface preference rather
+            // than the global prefer-paved toggle.
+            r = router.route(through: [s] + waypointNodes + [e], surfacePreference: plan.surfacePreference)
+        } else {
+            r = router.route(through: [s] + waypointNodes + [e], avoidUnpaved: userData.preferPavedRoutes)
+        }
         route = r
         if let r, let catalog = poiStore.pois {
             let coords = r.nodes.map { graph.nodes[$0].clCoord }
@@ -989,6 +1028,10 @@ struct MapTabView: View {
         guard let graph = store.graph else { return }
         let router = Router(graph: graph)
         guard let dest = router.nearestNode(to: poi.coordinate) else { return }
+        // A POI-targeted route is never a "planned" route, even if one was
+        // active — drop it so updateRoute(graph:) doesn't try to build a
+        // loop back to a start that no longer matches this new destination.
+        activePlan = nil
         endNode = dest
         if startNode == nil, let userLoc = locationManager.location {
             startNode = router.nearestNode(to: userLoc.coordinate)
@@ -1016,7 +1059,7 @@ struct MapTabView: View {
     private func liveShareMessage(remaining: Double) -> String {
         let miles = String(format: "%.2f", remaining / 1609.344)
         let time = travelTime(meters: remaining)
-        let verb = userData.travelMode == .bike ? "riding" : "walking"
+        let verb = userData.travelMode.gerund
         return "I'm currently \(verb) in The Woodlands — \(miles) mi and about \(time) left. Open this link in Woodlands Trail Guide to see the route."
     }
 
@@ -1025,7 +1068,7 @@ struct MapTabView: View {
         let time = travelTime(meters: r.lengthMeters)
         let firstLeg = r.namedSegments.first?.name
         let lastLeg = r.namedSegments.last?.name
-        let verb = userData.travelMode == .bike ? "ride" : "walk"
+        let verb = userData.travelMode.noun
         var msg = "A \(miles)-mile \(verb) in The Woodlands — about \(time)."
         if let firstLeg, let lastLeg, firstLeg != lastLeg {
             msg += " Starts on \(firstLeg), ends on \(lastLeg)."
@@ -1055,6 +1098,7 @@ struct MapTabView: View {
         startNode = nil
         endNode = nil
         waypointNodes = []
+        activePlan = nil
         route = nil
         routePOIs = []
         routeProgress = nil
@@ -1137,7 +1181,7 @@ private struct POIChip: View {
     }
 }
 
-/// Fallback shown when the loop builder is invoked without a location fix.
+/// Fallback shown when the route planner is invoked without a location fix.
 private struct LoopUnavailableSheet: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
@@ -1146,10 +1190,10 @@ private struct LoopUnavailableSheet: View {
             Image(systemName: "location.slash.fill")
                 .font(.system(size: 44))
                 .foregroundStyle(Natural.route)
-            Text("Location needed for loops")
+            Text("Location needed to plan a route")
                 .font(.headline)
                 .foregroundStyle(Natural.ink)
-            Text("Loop generation starts from where you are. Grant location access, or move outside so your device can pick up a fix, then try again.")
+            Text("The route planner starts from where you are. Grant location access, or move outside so your device can pick up a fix, then try again.")
                 .font(.callout)
                 .foregroundStyle(Natural.inkMuted)
                 .multilineTextAlignment(.center)

@@ -1,6 +1,81 @@
 import Foundation
 import CoreLocation
 
+/// Surface preference for route generation — mirrors the existing
+/// avoidUnpaved penalty (`.paved`) but also supports the opposite
+/// (`.natural`), for the route planner's "path type" picker. `.any` is the
+/// neutral weighting tap-to-route has always used.
+enum SurfacePreference: String, CaseIterable, Codable, Identifiable {
+    case any
+    case paved
+    case natural
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .any:     return "Any surface"
+        case .paved:   return "Paved paths"
+        case .natural: return "Natural trails"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .any:     return "circle.grid.2x2"
+        case .paved:   return "road.lanes"
+        case .natural: return "leaf"
+        }
+    }
+}
+
+/// Shape of a planner-generated route: a genuine loop (different path back,
+/// when the network offers one) or an out-and-back retrace.
+enum PlannedRouteShape: String, CaseIterable, Codable, Identifiable {
+    case loop
+    case outAndBack
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .loop:       return "Loop"
+        case .outAndBack: return "Out & back"
+        }
+    }
+
+    var blurb: String {
+        switch self {
+        case .loop:       return "Different path back, when one's available"
+        case .outAndBack: return "Retrace the same path home"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .loop:       return "arrow.triangle.2.circlepath"
+        case .outAndBack: return "arrow.left.and.right"
+        }
+    }
+}
+
+/// A distance/time target the route planner generated a route for. Threaded
+/// through MapTabView's routing state so off-route reroutes and the
+/// prefer-paved toggle keep recomputing consistently with the original
+/// plan — see MapTabView.updateRoute(graph:).
+struct RoutePlan: Hashable {
+    let shape: PlannedRouteShape
+    let surfacePreference: SurfacePreference
+    /// The target the user picked, in meters — for display ("Planned ~3 mi
+    /// loop"). The actual generated route.lengthMeters may differ slightly
+    /// since it's constrained to the real pathway network.
+    let targetMeters: Double
+    /// Walk/jog/run chosen in the planner — applied to userData.travelMode
+    /// on generate so ETA display and HealthKit logging match the intended
+    /// activity, not whatever mode happened to be selected before.
+    let activity: TravelMode
+}
+
 /// Client-side shortest-path routing over the TrailGraph.
 ///
 /// The Woodlands pathway network has ~1,500 segments and ~10K nodes — tiny
@@ -99,9 +174,19 @@ struct Router {
     ///
     /// Runs a bounded Dijkstra (stops expanding at 1.5× target) and picks
     /// the node whose distance is closest to the target.
-    func farthestNode(from start: Int, atRouteDistance target: Double) -> Int? {
+    ///
+    /// `surfacePreference` applies the same paved/natural penalty used by
+    /// routing to the search itself (not just the eventual route), so e.g.
+    /// a "paved only" plan doesn't pick a far node buried deep in a natural-
+    /// surface cul-de-sac just because it's the raw-meters closest match —
+    /// under a non-`.any` preference this targets weighted, not physical,
+    /// distance, which is what we want here: proportionally less likely to
+    /// send the plan somewhere the disfavored surface dominates.
+    func farthestNode(from start: Int, atRouteDistance target: Double,
+                       surfacePreference: SurfacePreference = .any) -> Int? {
         let n = graph.nodes.count
         guard start >= 0, start < n, target > 0 else { return nil }
+        let weight = Router.weight(for: surfacePreference, ways: graph.ways)
         var dist = [Double](repeating: .infinity, count: n)
         dist[start] = 0
         var heap = MinHeap<HeapEntry>()
@@ -110,7 +195,7 @@ struct Router {
             if cur.dist > dist[cur.node] { continue }
             if cur.dist > target * 1.5 { continue }
             for edge in graph.adj[cur.node] {
-                let nd = cur.dist + edge.lengthMeters
+                let nd = cur.dist + edge.lengthMeters * weight(edge.wayIndex)
                 if nd < dist[edge.neighbor] {
                     dist[edge.neighbor] = nd
                     heap.push(HeapEntry(node: edge.neighbor, dist: nd))
@@ -172,6 +257,14 @@ struct Router {
     /// paved alternative exists. For strollers/wheelchairs/anyone who wants
     /// to stay off natural surface.
     func route(through stops: [Int], avoidUnpaved: Bool = false) -> Route? {
+        route(through: stops, surfacePreference: avoidUnpaved ? .paved : .any)
+    }
+
+    /// Same idea as `route(through:avoidUnpaved:)` but with the fuller
+    /// 3-way surface preference the route planner offers — adds `.natural`
+    /// (prefer natural-surface trails), which `avoidUnpaved` has no
+    /// equivalent for since it only ever penalizes toward paved.
+    func route(through stops: [Int], surfacePreference: SurfacePreference) -> Route? {
         guard stops.count >= 2 else {
             if stops.count == 1 {
                 return Route(nodes: [stops[0]], lengthMeters: 0,
@@ -179,10 +272,7 @@ struct Router {
             }
             return nil
         }
-        let ways = graph.ways
-        let weight: (Int) -> Double = avoidUnpaved
-            ? { wayIndex in ways[wayIndex].kind == "trail" ? 8.0 : 1.0 }
-            : { _ in 1.0 }
+        let weight = Router.weight(for: surfacePreference, ways: graph.ways)
         var combinedPath: [Int] = []
         var combinedEdgeWays: [Int] = []
         var totalMeters = 0.0
@@ -210,6 +300,77 @@ struct Router {
         )
     }
 
+    /// Builds a genuine loop from `start` out to `far` and back. Unlike
+    /// `route(through: [start, far, start])` — which runs the same weighted
+    /// Dijkstra in both directions and will almost always retrace the exact
+    /// same edges, an out-and-back wearing a loop's name — this discourages
+    /// the return leg from reusing the outbound leg's edges, so it prefers a
+    /// different way home whenever the network offers one. Degrades
+    /// gracefully to a retrace on a dead-end trail where no alternative
+    /// connection exists: the discourage penalty makes reuse expensive, not
+    /// impossible, so a route is still always returned.
+    func loopRoute(from start: Int, viaFar far: Int, surfacePreference: SurfacePreference = .any) -> Route? {
+        let weight = Router.weight(for: surfacePreference, ways: graph.ways)
+        guard let outbound = _pathFrom(start, to: far, weight: weight) else { return nil }
+        let usedEdges = Router.edgeKeys(path: outbound.path)
+        guard let inbound = _pathFrom(far, to: start, weight: weight, discourage: usedEdges) else { return nil }
+
+        var combinedPath = outbound.path
+        if let last = combinedPath.last, last == inbound.path.first {
+            combinedPath.append(contentsOf: inbound.path.dropFirst())
+        } else {
+            combinedPath.append(contentsOf: inbound.path)
+        }
+        let combinedEdgeWays = outbound.edgeWays + inbound.edgeWays
+        let totalMeters = outbound.lengthMeters + inbound.lengthMeters
+
+        return Route(
+            nodes: combinedPath,
+            lengthMeters: totalMeters,
+            namedSegments: collapseSegments(edgeWays: combinedEdgeWays, path: combinedPath),
+            parks: uniqueParks(edgeWays: combinedEdgeWays),
+            turnInstructions: buildTurnInstructions(edgeWays: combinedEdgeWays, path: combinedPath)
+        )
+    }
+
+    /// Undirected edge identity (min/max node pair) — used by loopRoute to
+    /// discourage the return leg from retracing the outbound leg's edges.
+    private struct EdgeKey: Hashable {
+        let a: Int
+        let b: Int
+        init(_ x: Int, _ y: Int) {
+            a = min(x, y)
+            b = max(x, y)
+        }
+    }
+
+    /// The set of undirected edges crossed by a node path, keyed so a
+    /// second pass can discourage — not forbid — reusing them.
+    private static func edgeKeys(path: [Int]) -> Set<EdgeKey> {
+        guard path.count >= 2 else { return [] }
+        var keys = Set<EdgeKey>(minimumCapacity: path.count - 1)
+        for i in 0..<(path.count - 1) {
+            keys.insert(EdgeKey(path[i], path[i + 1]))
+        }
+        return keys
+    }
+
+    /// Builds a per-wayIndex cost multiplier for the given surface
+    /// preference. `.any` is neutral (every edge costs its real length).
+    /// `.paved`/`.natural` penalize (never exclude) the disfavored kind 8x,
+    /// so the router still always finds a route — it just strongly prefers
+    /// the matching surface when an alternative exists.
+    private static func weight(for preference: SurfacePreference, ways: [TrailGraph.Way]) -> (Int) -> Double {
+        switch preference {
+        case .any:
+            return { _ in 1.0 }
+        case .paved:
+            return { wayIndex in ways[wayIndex].kind == "trail" ? 8.0 : 1.0 }
+        case .natural:
+            return { wayIndex in ways[wayIndex].kind == "trail" ? 1.0 : 8.0 }
+        }
+    }
+
     /// The raw Dijkstra + reconstruction primitive shared by route(from:to:)
     /// and route(through:). Returns nil on unreachable, empty edges for a
     /// zero-length trip (start == end).
@@ -220,7 +381,12 @@ struct Router {
     /// physical distance along the chosen path, recomputed separately from
     /// the real edge lengths, so a caller weighting toward paved surfaces
     /// still gets an honest mileage figure, not an inflated weighted cost.
-    private func _pathFrom(_ start: Int, to end: Int, weight: (Int) -> Double = { _ in 1.0 })
+    /// `discourage` heavily up-weights specific undirected edges (identified
+    /// by node pair, not wayIndex — a single way can be crossed at more than
+    /// one point) without excluding them. Used only by loopRoute, to steer
+    /// the return leg away from the outbound leg's exact path.
+    private func _pathFrom(_ start: Int, to end: Int, weight: (Int) -> Double = { _ in 1.0 },
+                            discourage: Set<EdgeKey> = [])
         -> (path: [Int], edgeWays: [Int], lengthMeters: Double)? {
         let n = graph.nodes.count
         guard start >= 0, start < n, end >= 0, end < n else { return nil }
@@ -240,7 +406,10 @@ struct Router {
             if cur.dist > dist[cur.node] { continue }
             if cur.node == end { break }
             for edge in graph.adj[cur.node] {
-                let cost = edge.lengthMeters * weight(edge.wayIndex)
+                var cost = edge.lengthMeters * weight(edge.wayIndex)
+                if !discourage.isEmpty, discourage.contains(EdgeKey(cur.node, edge.neighbor)) {
+                    cost *= 6.0
+                }
                 let nd = cur.dist + cost
                 if nd < dist[edge.neighbor] {
                     dist[edge.neighbor] = nd

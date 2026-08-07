@@ -322,16 +322,20 @@ struct TripLogEntry: Codable, Hashable, Identifiable {
     var miles: Double { distanceMeters / 1609.344 }
 }
 
-/// Walk vs bike. Both route over the same shared pathway network — this
-/// only changes the pace assumption used for ETA/duration displays (and
-/// which HKWorkoutActivityType a synced walk is logged as).
+/// Walk, jog, run, or bike. All four route over the same shared pathway
+/// network — this only changes the pace assumption used for ETA/duration
+/// displays (and which HKWorkoutActivityType a synced walk is logged as).
 enum TravelMode: String, CaseIterable, Codable {
     case walk
+    case jog
+    case run
     case bike
 
     var label: String {
         switch self {
         case .walk: return "Walk"
+        case .jog:  return "Jog"
+        case .run:  return "Run"
         case .bike: return "Bike"
         }
     }
@@ -339,15 +343,42 @@ enum TravelMode: String, CaseIterable, Codable {
     var systemImage: String {
         switch self {
         case .walk: return "figure.walk"
+        case .jog:  return "figure.run"
+        case .run:  return "figure.run"
         case .bike: return "figure.outdoor.cycle"
         }
     }
 
     /// Assumed pace in miles per hour, used for every duration estimate.
+    /// jog/run are deliberately conservative (an easy jog, a moderate run) —
+    /// this drives ETA display and the route planner's time-to-distance
+    /// conversion, not a training-pace calculator.
     var paceMph: Double {
         switch self {
         case .walk: return 3.0
+        case .jog:  return 5.0
+        case .run:  return 6.0
         case .bike: return 12.0
+        }
+    }
+
+    /// Noun for the route-summary line: "24 min walk" / "12 min run".
+    var noun: String {
+        switch self {
+        case .walk: return "walk"
+        case .jog:  return "jog"
+        case .run:  return "run"
+        case .bike: return "ride"
+        }
+    }
+
+    /// Gerund for live-share/status messages: "walking" / "running".
+    var gerund: String {
+        switch self {
+        case .walk: return "walking"
+        case .jog:  return "jogging"
+        case .run:  return "running"
+        case .bike: return "riding"
         }
     }
 }
