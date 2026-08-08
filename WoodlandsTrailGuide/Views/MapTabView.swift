@@ -38,6 +38,18 @@ struct MapTabView: View {
     @State private var showingReroutedToast = false
     private let offRouteThreshold: Double = 100    // meters
     private let offRouteDuration: TimeInterval = 8 // seconds sustained
+    /// True once the user has come within `offRouteThreshold` of the route
+    /// polyline at least once since tapping "Start". Starting navigation
+    /// off-network (a driveway, a street that isn't part of the pathway
+    /// graph) used to be indistinguishable from having drifted off an
+    /// already-joined route — after 8 stationary seconds the off-route
+    /// timer below would fire and silently replace the whole plan (loop
+    /// shape, surface preference, waypoints and all) with a bare point-to-
+    /// point route from wherever the user happened to be standing. Gating
+    /// that logic on this flag instead shows a distinct "walk to the
+    /// trail" banner state (see joiningRouteContent) until they actually
+    /// reach the route, then behaves exactly as before.
+    @State private var hasJoinedRoute = false
     /// Bumped when the user picks a search result — TrailMapView watches this
     /// alongside a stored `searchTargetCoordinate` and pans the map there.
     @State private var searchFocusTick: Int = 0
@@ -720,6 +732,18 @@ struct MapTabView: View {
                 .foregroundStyle(Natural.forest)
             }
 
+            if let graph = store.graph, let loc = locationManager.location {
+                let toRoute = Router(graph: graph).progress(along: r, at: loc).distanceFromRoute
+                if toRoute > offRouteThreshold {
+                    HStack(spacing: 5) {
+                        Image(systemName: "signpost.right.and.left")
+                        Text("\(distanceText(meters: toRoute)) to reach the trail from here")
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Natural.inkMuted)
+                }
+            }
+
             if !r.namedSegments.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Route")
@@ -835,7 +859,86 @@ struct MapTabView: View {
 
     // MARK: - Navigation banner (during walking)
 
+    @ViewBuilder
     private func navigationBanner(route r: Router.Route) -> some View {
+        if !hasJoinedRoute {
+            bannerCard { joiningRouteContent }
+        } else {
+            bannerCard { activeNavigationContent(r) }
+        }
+    }
+
+    /// Shared card chrome for the nav banner — factored out so both the
+    /// "walk to the trail" state and the normal turn-by-turn state render
+    /// identically framed.
+    private func bannerCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .background(Natural.cardBg, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(Natural.hairline, lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 14)
+    }
+
+    /// Shown once "Start" is tapped but before the user has reached the
+    /// route — e.g. they started from a driveway or a street off the
+    /// pathway network. The app has no street geometry, so this is an
+    /// honest straight-line distance to the nearest point on the route,
+    /// not turn-by-turn — the map's route polyline is what actually shows
+    /// the way there. Clears automatically once distanceFromRoute drops
+    /// under the join threshold — see updateProgress(graph:).
+    private var joiningRouteContent: some View {
+        let toRoute = routeProgress?.distanceFromRoute ?? 0
+        return VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: "signpost.right.and.left.fill")
+                    .font(.system(size: 32, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 60, height: 60)
+                    .background(Natural.route, in: Circle())
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Head to the trail")
+                        .font(.headline)
+                        .foregroundStyle(Natural.ink)
+                    Text("About \(distanceText(meters: toRoute)) to reach your route")
+                        .font(.subheadline)
+                        .foregroundStyle(Natural.ink)
+                    Text("Straight-line estimate — follow the map, not turn-by-turn")
+                        .font(.caption)
+                        .foregroundStyle(Natural.inkMuted)
+                }
+                Spacer(minLength: 0)
+            }
+
+            Divider()
+                .background(Natural.hairline)
+                .padding(.top, 12)
+                .padding(.bottom, 10)
+
+            HStack {
+                Text("Turn-by-turn starts once you reach the trail")
+                    .font(.caption)
+                    .foregroundStyle(Natural.inkMuted)
+                Spacer()
+                Button {
+                    clearRoute()
+                } label: {
+                    Text("End")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(Natural.route, in: Capsule())
+                }
+            }
+        }
+    }
+
+    private func activeNavigationContent(_ r: Router.Route) -> some View {
         let progress = routeProgress
         let upcoming = progress?.upcomingInstruction ?? r.turnInstructions.first
         let isArrived = progress?.isArrived ?? false
@@ -923,15 +1026,6 @@ struct MapTabView: View {
                 .padding(.top, 8)
             }
         }
-        .padding(.horizontal, 16).padding(.vertical, 14)
-        .background(Natural.cardBg, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Natural.hairline, lineWidth: 0.5)
-        )
-        .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-        .padding(.horizontal, 12)
-        .padding(.bottom, 14)
     }
 
     // MARK: - Routing logic
@@ -983,6 +1077,19 @@ struct MapTabView: View {
         let progress = router.progress(along: r, at: loc)
         routeProgress = progress
 
+        guard hasJoinedRoute else {
+            // Still walking to the trail (see joiningRouteContent) — don't
+            // run the off-route/reroute logic at all yet, just watch for
+            // arrival. Without this gate, standing off-network for 8
+            // seconds right after tapping "Start" looked identical to
+            // having drifted off an already-joined route, and the block
+            // below would silently replace the whole planned route.
+            if progress.distanceFromRoute <= offRouteThreshold {
+                hasJoinedRoute = true
+            }
+            return
+        }
+
         // Off-route auto-reroute: if the user has drifted > threshold for
         // sustained duration, silently recompute a new route from their
         // current position to the same destination. Waypoints are dropped —
@@ -1014,10 +1121,16 @@ struct MapTabView: View {
     private func startNavigation(graph: TrailGraph) {
         navigationActive = true
         navigationStartedAt = .now
+        hasJoinedRoute = false
         // Compute initial progress so the banner shows real numbers from the
-        // first frame instead of placeholder values pulled from the route.
+        // first frame instead of placeholder values pulled from the route —
+        // and so hasJoinedRoute reflects reality immediately (the common
+        // case: starting right at the trailhead) instead of flashing the
+        // "walk to the trail" state for one frame before the next fix.
         if let loc = locationManager.location, let r = route {
-            routeProgress = Router(graph: graph).progress(along: r, at: loc)
+            let progress = Router(graph: graph).progress(along: r, at: loc)
+            routeProgress = progress
+            hasJoinedRoute = progress.distanceFromRoute <= offRouteThreshold
         }
     }
 
@@ -1102,6 +1215,8 @@ struct MapTabView: View {
         route = nil
         routePOIs = []
         routeProgress = nil
+        hasJoinedRoute = false
+        offRouteSince = nil
     }
 
     /// Duration estimate at the current travel mode's pace. Named generically
