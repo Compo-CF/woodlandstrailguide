@@ -16,6 +16,12 @@ struct WoodlandsTrailGuideApp: App {
     @State private var featuredWalkStore = FeaturedWalkStore()
 
     init() {
+        // Cap ad content to a rating suitable for a general-audience hiking
+        // app. Without this, AdMob's default targeting can serve adult/
+        // dating/suggestive creative that has no business next to trail
+        // directions. Must be set before start() — applies to every ad
+        // request for the lifetime of the process, banner or otherwise.
+        GADMobileAds.sharedInstance().requestConfiguration.maxAdContentRating = .general
         // Initialize Google Mobile Ads SDK. Ads start loading immediately;
         // the BannerAdView call sites kick off individual requests when shown.
         GADMobileAds.sharedInstance().start(completionHandler: nil)
