@@ -94,13 +94,25 @@ enum RouteStartMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// Whether the planner's target is expressed as a distance or a duration.
+/// Lives here rather than nested inside RoutePlannerSheet so RouteDraft
+/// (a plain model) doesn't have to reach into a SwiftUI view's namespace.
+enum RouteTargetKind: String, CaseIterable, Identifiable {
+    case distance
+    case time
+
+    var id: String { rawValue }
+
+    var label: String { self == .distance ? "Distance" : "Time" }
+}
+
 /// A snapshot of every RoutePlannerSheet selection, used to restore the
 /// sheet's state when it's dismissed to let the user tap a starting point
 /// on the map, then reopened once that tap lands. Plain data — no
 /// behavior — so it's cheap to stash in MapTabView between the dismiss
 /// and reopen.
 struct RouteDraft {
-    var targetKind: RoutePlannerSheet.TargetKind = .distance
+    var targetKind: RouteTargetKind = .distance
     var selectedMiles: Double = 2
     var selectedMinutes: Double = 30
     var activity: TravelMode = .walk

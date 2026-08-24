@@ -1363,7 +1363,11 @@ private struct TrailDataUnavailableSheet: View {
     var body: some View {
         VStack(spacing: 16) {
             Spacer()
-            Image(systemName: "map.slash")
+            // Deliberately reusing the same symbol as loadingOrError above —
+            // "map.slash" would read better here but I'm not certain it
+            // exists in SF Symbols, and a bad name renders as blank space
+            // at runtime rather than failing the build.
+            Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 44))
                 .foregroundStyle(Natural.route)
             Text("Trail data still loading")

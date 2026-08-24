@@ -7,13 +7,6 @@ import CoreLocation
 /// paved/natural), and shape (loop vs out-and-back). Replaces the old
 /// fixed-distance-only LoopBuilderSheet.
 struct RoutePlannerSheet: View {
-    enum TargetKind: String, CaseIterable, Identifiable {
-        case distance
-        case time
-        var id: String { rawValue }
-        var label: String { self == .distance ? "Distance" : "Time" }
-    }
-
     let graph: TrailGraph
     /// The user's live location, if we have a fix. Optional now — Address
     /// and Tap on Map starting points don't need one, so a missing fix no
@@ -36,7 +29,7 @@ struct RoutePlannerSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    @State private var targetKind: TargetKind
+    @State private var targetKind: RouteTargetKind
     @State private var selectedMiles: Double
     @State private var selectedMinutes: Double
     @State private var activity: TravelMode
@@ -128,7 +121,7 @@ struct RoutePlannerSheet: View {
                     }
 
                     section("Target") {
-                        chipRow(TargetKind.allCases, selection: $targetKind) { $0.label }
+                        chipRow(RouteTargetKind.allCases, selection: $targetKind) { $0.label }
                         if targetKind == .distance {
                             chipRow(mileOptions, selection: $selectedMiles) { formatMiles($0) }
                         } else {
