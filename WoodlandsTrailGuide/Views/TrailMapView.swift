@@ -376,8 +376,17 @@ struct TrailMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, didSelect annotation: MKAnnotation) {
             if let poi = annotation as? POIAnnotation {
-                parent.onSelectPOI(poi.poi, poi.category)
                 mapView.deselectAnnotation(annotation, animated: false)
+                // Annotation selection is delivered here, NOT through the
+                // tap recognizer, so the awaitingPlannerTap check in
+                // handleTap never sees it. Without this branch, tapping a
+                // POI pin while the planner waits for a starting point
+                // would open the POI sheet and leave the banner stranded.
+                if parent.awaitingPlannerTap {
+                    parent.onPlannerTapCoordinate(poi.poi.coordinate)
+                    return
+                }
+                parent.onSelectPOI(poi.poi, poi.category)
             }
         }
 

@@ -213,6 +213,18 @@ struct RoutePlannerSheet: View {
                     .textFieldStyle(.roundedBorder)
                     .submitLabel(.search)
                     .onSubmit { geocodeAddress() }
+                    // Editing the text after a successful lookup makes the
+                    // resolved coordinate stale — the green checkmark below
+                    // would keep claiming a match while Generate silently
+                    // routed from the OLD address. Drop it on any edit.
+                    .onChange(of: addressText) { _, newValue in
+                        if let addressLabel,
+                           newValue.trimmingCharacters(in: .whitespaces) != addressLabel {
+                            addressCoordinate = nil
+                            self.addressLabel = nil
+                        }
+                        addressError = nil
+                    }
                 Button {
                     geocodeAddress()
                 } label: {
