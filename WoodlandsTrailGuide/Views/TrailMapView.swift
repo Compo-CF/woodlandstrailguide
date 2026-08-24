@@ -48,9 +48,16 @@ struct TrailMapView: UIViewRepresentable {
     /// and the map pans to it when this counter changes.
     let searchFocusTick: Int
     let searchFocusCoordinate: CLLocationCoordinate2D?
+    /// True while the route planner is waiting for the user to tap a
+    /// starting point on the map — see MapTabView's awaitingPlannerTap.
+    /// Taps are intercepted for this before anything else (routing mode,
+    /// trail detail) and never fall through to that other handling.
+    @Binding var awaitingPlannerTap: Bool
     /// Called when the user taps a POI annotation on the map. Passed the
     /// POI + its owning category so MapTabView can present a detail sheet.
     let onSelectPOI: (POI, POICategory) -> Void
+    /// Called with the tapped coordinate while awaitingPlannerTap is true.
+    let onPlannerTapCoordinate: (CLLocationCoordinate2D) -> Void
 
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()
@@ -441,6 +448,11 @@ struct TrailMapView: UIViewRepresentable {
             if parent.navigationActive { return }
             let point = recognizer.location(in: mapView)
             let tapCoord = mapView.convert(point, toCoordinateFrom: mapView)
+
+            if parent.awaitingPlannerTap {
+                parent.onPlannerTapCoordinate(tapCoord)
+                return
+            }
 
             if parent.routingMode {
                 let router = Router(graph: parent.graph)

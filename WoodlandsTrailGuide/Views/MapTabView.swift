@@ -21,6 +21,15 @@ struct MapTabView: View {
     @State private var showingWeather = false
     @State private var showingSearch = false
     @State private var showingRoutePlanner = false
+    /// Stashed RoutePlannerSheet selections while the user is off tapping a
+    /// starting point on the map (see awaitingPlannerTap below) — restored
+    /// as the sheet's initialDraft when it reopens.
+    @State private var plannerDraft: RouteDraft?
+    /// True right after the route planner asks the user to tap a starting
+    /// point on the map. The sheet is dismissed for the duration; a banner
+    /// with a Cancel button takes its place, and the next map tap resolves
+    /// the draft's tapCoordinate and reopens the sheet.
+    @State private var awaitingPlannerTap = false
     @State private var showingConditionReport = false
     @State private var showingWildlifeSighting = false
     /// Wall-clock start of the active navigation session — used to compute
@@ -120,8 +129,17 @@ struct MapTabView: View {
                     recenterTick: recenterTick,
                     searchFocusTick: searchFocusTick,
                     searchFocusCoordinate: searchFocusCoordinate,
+                    awaitingPlannerTap: $awaitingPlannerTap,
                     onSelectPOI: { poi, category in
                         selectedPOI = (poi, category)
+                    },
+                    onPlannerTapCoordinate: { coordinate in
+                        var draft = plannerDraft ?? RouteDraft()
+                        draft.startMode = .tapOnMap
+                        draft.tapCoordinate = coordinate
+                        plannerDraft = draft
+                        awaitingPlannerTap = false
+                        showingRoutePlanner = true
                     }
                 )
                 .ignoresSafeArea(edges: .top)
@@ -252,6 +270,33 @@ struct MapTabView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
 
+                if awaitingPlannerTap {
+                    VStack {
+                        HStack(spacing: 12) {
+                            Image(systemName: "hand.tap.fill")
+                                .font(.subheadline.weight(.bold))
+                            Text("Tap the map to set your starting point")
+                                .font(.subheadline.weight(.semibold))
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 0)
+                            Button("Cancel") {
+                                awaitingPlannerTap = false
+                                showingRoutePlanner = true
+                            }
+                            .font(.subheadline.weight(.semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16).padding(.vertical, 12)
+                        .background(Natural.forest, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 76)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
                 if let achievement = toastAchievement {
                     VStack {
                         HStack(spacing: 10) {
@@ -284,6 +329,7 @@ struct MapTabView: View {
         .animation(.easeInOut(duration: 0.22), value: navigationActive)
         .animation(.easeInOut(duration: 0.28), value: showingReroutedToast)
         .animation(.easeInOut(duration: 0.28), value: toastAchievement)
+        .animation(.easeInOut(duration: 0.22), value: awaitingPlannerTap)
         .onAppear {
             locationManager.requestPermission()
             Task {
@@ -303,10 +349,11 @@ struct MapTabView: View {
             }
         }
         .sheet(isPresented: $showingRoutePlanner) {
-            if let graph = store.graph, let loc = locationManager.location {
+            if let graph = store.graph {
                 RoutePlannerSheet(
                     graph: graph,
-                    userLocation: loc,
+                    userLocation: locationManager.location,
+                    initialDraft: plannerDraft,
                     onGenerate: { startIdx, farIdx, plan in
                         // Load into the routing state — start == end with a
                         // waypoint in between — so updateRoute(graph:) can
@@ -320,11 +367,22 @@ struct MapTabView: View {
                         activePlan = plan
                         userData.travelMode = plan.activity
                         userData.saveTravelMode()
+                        plannerDraft = nil
+                    },
+                    onRequestMapTap: { draft in
+                        plannerDraft = draft
+                        showingRoutePlanner = false
+                        // Let the sheet's dismiss animation finish before the
+                        // "tap the map" banner slides in — presenting both at
+                        // once looks like a glitch.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            awaitingPlannerTap = true
+                        }
                     }
                 )
                 .presentationDetents([.large])
             } else {
-                LoopUnavailableSheet()
+                TrailDataUnavailableSheet()
                     .presentationDetents([.height(220)])
             }
         }
@@ -481,6 +539,7 @@ struct MapTabView: View {
     /// approximately target-distance / 2 — see updateRoute(graph:).
     private var plannerButton: some View {
         Button {
+            plannerDraft = nil
             showingRoutePlanner = true
         } label: {
             Image(systemName: "figure.run")
@@ -1296,19 +1355,21 @@ private struct POIChip: View {
     }
 }
 
-/// Fallback shown when the route planner is invoked without a location fix.
-private struct LoopUnavailableSheet: View {
+/// Fallback shown when the route planner is invoked before trail data has
+/// loaded. Location is no longer a blocker here — Address and Tap on Map
+/// starting points in RoutePlannerSheet don't need a live fix.
+private struct TrailDataUnavailableSheet: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         VStack(spacing: 16) {
             Spacer()
-            Image(systemName: "location.slash.fill")
+            Image(systemName: "map.slash")
                 .font(.system(size: 44))
                 .foregroundStyle(Natural.route)
-            Text("Location needed to plan a route")
+            Text("Trail data still loading")
                 .font(.headline)
                 .foregroundStyle(Natural.ink)
-            Text("The route planner starts from where you are. Grant location access, or move outside so your device can pick up a fix, then try again.")
+            Text("Give it a moment to finish loading the trail network, then try again.")
                 .font(.callout)
                 .foregroundStyle(Natural.inkMuted)
                 .multilineTextAlignment(.center)

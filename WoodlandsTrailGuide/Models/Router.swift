@@ -76,6 +76,43 @@ struct RoutePlan: Hashable {
     let activity: TravelMode
 }
 
+/// Where a planner-generated route should start from — the user's live
+/// location, a geocoded address, or a point they tapped on the map.
+enum RouteStartMode: String, CaseIterable, Identifiable {
+    case currentLocation
+    case address
+    case tapOnMap
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .currentLocation: return "Current Location"
+        case .address:         return "Address"
+        case .tapOnMap:        return "Tap on Map"
+        }
+    }
+}
+
+/// A snapshot of every RoutePlannerSheet selection, used to restore the
+/// sheet's state when it's dismissed to let the user tap a starting point
+/// on the map, then reopened once that tap lands. Plain data — no
+/// behavior — so it's cheap to stash in MapTabView between the dismiss
+/// and reopen.
+struct RouteDraft {
+    var targetKind: RoutePlannerSheet.TargetKind = .distance
+    var selectedMiles: Double = 2
+    var selectedMinutes: Double = 30
+    var activity: TravelMode = .walk
+    var surfacePreference: SurfacePreference = .any
+    var shape: PlannedRouteShape = .loop
+    var startMode: RouteStartMode = .currentLocation
+    var addressText: String = ""
+    var addressCoordinate: CLLocationCoordinate2D?
+    var addressLabel: String?
+    var tapCoordinate: CLLocationCoordinate2D?
+}
+
 /// Client-side shortest-path routing over the TrailGraph.
 ///
 /// The Woodlands pathway network has ~1,500 segments and ~10K nodes — tiny

@@ -15,22 +15,64 @@ struct RoutePlannerSheet: View {
     }
 
     let graph: TrailGraph
-    let userLocation: CLLocation
+    /// The user's live location, if we have a fix. Optional now — Address
+    /// and Tap on Map starting points don't need one, so a missing fix no
+    /// longer blocks the whole sheet (see MapTabView's presentation logic).
+    let userLocation: CLLocation?
+    /// Restores every selection (including a previously-picked starting
+    /// point) when the sheet reopens after the user chose "Tap on Map" and
+    /// left to tap the map. Nil for a fresh, from-scratch open.
+    var initialDraft: RouteDraft? = nil
     /// Fired with (startNodeIndex, farNodeIndex, plan). MapTabView plugs
     /// both into its routing state (start = end = start, waypoint = far)
     /// and stores `plan` so updateRoute(graph:) knows to build a genuine
     /// loop (or a surface-aware out-and-back) instead of a plain tap route.
     let onGenerate: (Int, Int, RoutePlan) -> Void
+    /// Fired when the user taps "Choose point on map" (or "Change") in the
+    /// Tap on Map panel. MapTabView dismisses this sheet, drops the map into
+    /// a one-shot "tap to set start" mode, and reopens the sheet (with the
+    /// draft passed back as `initialDraft`) once a tap lands.
+    let onRequestMapTap: (RouteDraft) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
-    @State private var targetKind: TargetKind = .distance
-    @State private var selectedMiles: Double = 2
-    @State private var selectedMinutes: Double = 30
-    @State private var activity: TravelMode = .walk
-    @State private var surfacePreference: SurfacePreference = .any
-    @State private var shape: PlannedRouteShape = .loop
+    @State private var targetKind: TargetKind
+    @State private var selectedMiles: Double
+    @State private var selectedMinutes: Double
+    @State private var activity: TravelMode
+    @State private var surfacePreference: SurfacePreference
+    @State private var shape: PlannedRouteShape
+    @State private var startMode: RouteStartMode
+    @State private var addressText: String
+    @State private var addressCoordinate: CLLocationCoordinate2D?
+    @State private var addressLabel: String?
+    @State private var addressError: String?
+    @State private var isGeocoding = false
+    @State private var tapCoordinate: CLLocationCoordinate2D?
     @State private var couldNotGenerate = false
+    @State private var missingStartPoint = false
+
+    init(graph: TrailGraph, userLocation: CLLocation?, initialDraft: RouteDraft? = nil,
+         onGenerate: @escaping (Int, Int, RoutePlan) -> Void,
+         onRequestMapTap: @escaping (RouteDraft) -> Void) {
+        self.graph = graph
+        self.userLocation = userLocation
+        self.initialDraft = initialDraft
+        self.onGenerate = onGenerate
+        self.onRequestMapTap = onRequestMapTap
+        let d = initialDraft
+        _targetKind = State(initialValue: d?.targetKind ?? .distance)
+        _selectedMiles = State(initialValue: d?.selectedMiles ?? 2)
+        _selectedMinutes = State(initialValue: d?.selectedMinutes ?? 30)
+        _activity = State(initialValue: d?.activity ?? .walk)
+        _surfacePreference = State(initialValue: d?.surfacePreference ?? .any)
+        _shape = State(initialValue: d?.shape ?? .loop)
+        _startMode = State(initialValue: d?.startMode ?? .currentLocation)
+        _addressText = State(initialValue: d?.addressText ?? "")
+        _addressCoordinate = State(initialValue: d?.addressCoordinate)
+        _addressLabel = State(initialValue: d?.addressLabel)
+        _tapCoordinate = State(initialValue: d?.tapCoordinate)
+    }
 
     private let mileOptions: [Double] = [1, 2, 3, 5, 6.2, 10]
     private let minuteOptions: [Double] = [15, 20, 30, 45, 60, 90]
@@ -73,11 +115,16 @@ struct RoutePlannerSheet: View {
                         Text("Plan a walk, jog, or run")
                             .font(.title3.bold())
                             .foregroundStyle(Natural.ink)
-                        Text("Set a target and we'll build a route to match, starting from where you are.")
+                        Text("Set a target and we'll build a route to match.")
                             .font(.callout)
                             .multilineTextAlignment(.center)
                             .foregroundStyle(Natural.inkMuted)
                             .padding(.horizontal, 28)
+                    }
+
+                    section("Starting point") {
+                        chipRow(RouteStartMode.allCases, selection: $startMode) { $0.label }
+                        startPointPanel
                     }
 
                     section("Target") {
@@ -107,8 +154,14 @@ struct RoutePlannerSheet: View {
                             .foregroundStyle(Natural.inkMuted)
                     }
 
-                    if couldNotGenerate {
-                        Text("Couldn't find a route that long near you — try a shorter target.")
+                    if missingStartPoint {
+                        Text("Choose a starting point first.")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(Natural.route)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                    } else if couldNotGenerate {
+                        Text("Couldn't find a route that long near there — try a shorter target.")
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(Natural.route)
                             .multilineTextAlignment(.center)
@@ -143,6 +196,110 @@ struct RoutePlannerSheet: View {
         }
     }
 
+    // MARK: - Starting point
+
+    @ViewBuilder
+    private var startPointPanel: some View {
+        switch startMode {
+        case .currentLocation:
+            if userLocation == nil {
+                Text("Location unavailable — try an address or tap the map instead.")
+                    .font(.caption)
+                    .foregroundStyle(Natural.route)
+            }
+        case .address:
+            HStack(spacing: 8) {
+                TextField("Address or place", text: $addressText)
+                    .textFieldStyle(.roundedBorder)
+                    .submitLabel(.search)
+                    .onSubmit { geocodeAddress() }
+                Button {
+                    geocodeAddress()
+                } label: {
+                    if isGeocoding {
+                        ProgressView().frame(width: 20)
+                    } else {
+                        Text("Find").font(.subheadline.weight(.semibold))
+                    }
+                }
+                .disabled(isGeocoding || addressText.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            if let addressLabel, addressCoordinate != nil {
+                Label(addressLabel, systemImage: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(Natural.forest)
+            } else if let addressError {
+                Text(addressError)
+                    .font(.caption)
+                    .foregroundStyle(Natural.route)
+            }
+        case .tapOnMap:
+            if let tapCoordinate {
+                HStack {
+                    Label(coordinateLabel(tapCoordinate), systemImage: "mappin.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(Natural.forest)
+                    Spacer()
+                    Button("Change") { onRequestMapTap(currentDraft()) }
+                        .font(.caption.weight(.semibold))
+                }
+            } else {
+                Button {
+                    onRequestMapTap(currentDraft())
+                } label: {
+                    Label("Choose point on map", systemImage: "hand.tap")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Natural.forest)
+                }
+            }
+        }
+    }
+
+    private func coordinateLabel(_ c: CLLocationCoordinate2D) -> String {
+        String(format: "%.4f, %.4f", c.latitude, c.longitude)
+    }
+
+    private func currentDraft() -> RouteDraft {
+        RouteDraft(
+            targetKind: targetKind, selectedMiles: selectedMiles, selectedMinutes: selectedMinutes,
+            activity: activity, surfacePreference: surfacePreference, shape: shape,
+            startMode: .tapOnMap, addressText: addressText, addressCoordinate: addressCoordinate,
+            addressLabel: addressLabel, tapCoordinate: nil
+        )
+    }
+
+    private func geocodeAddress() {
+        let text = addressText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        isGeocoding = true
+        addressError = nil
+        addressCoordinate = nil
+        Task {
+            let placemarks = try? await CLGeocoder().geocodeAddressString(text)
+            await MainActor.run {
+                isGeocoding = false
+                if let loc = placemarks?.first?.location {
+                    addressCoordinate = loc.coordinate
+                    addressLabel = placemarks?.first?.name ?? text
+                } else {
+                    addressError = "Couldn't find that address."
+                }
+            }
+        }
+    }
+
+    /// The coordinate to route from, resolved from whichever starting-point
+    /// mode is active. Nil means the user hasn't finished picking one yet
+    /// (address not geocoded, map tap not made) — Generate shows a nudge
+    /// instead of silently failing.
+    private var resolvedStartCoordinate: CLLocationCoordinate2D? {
+        switch startMode {
+        case .currentLocation: return userLocation?.coordinate
+        case .address:         return addressCoordinate
+        case .tapOnMap:        return tapCoordinate
+        }
+    }
+
     // MARK: - Layout helpers
 
     @ViewBuilder
@@ -170,8 +327,13 @@ struct RoutePlannerSheet: View {
 
     private func generate() {
         couldNotGenerate = false
+        missingStartPoint = false
+        guard let coordinate = resolvedStartCoordinate else {
+            missingStartPoint = true
+            return
+        }
         let router = Router(graph: graph)
-        guard let start = router.nearestNode(to: userLocation.coordinate),
+        guard let start = router.nearestNode(to: coordinate),
               targetMeters > 0,
               let far = router.farthestNode(
                 from: start,
