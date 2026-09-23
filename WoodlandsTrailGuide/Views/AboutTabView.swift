@@ -16,6 +16,11 @@ struct AboutTabView: View {
     private let stierEatsURL = URL(string: "https://apps.apple.com/app/id6773501518")!
     private let cosmicaURL = URL(string: "https://apps.apple.com/app/id6784340038")!
     private let supportURL = URL(string: "https://compo-cf.github.io/woodlandstrailguide/support.html")!
+    /// Deep link straight into the App Store's write-a-review sheet for this
+    /// app. The system requestReview() prompt is rate-limited by Apple (3/yr,
+    /// and it alone decides whether to actually show) — this row is the only
+    /// path a motivated user has to leave a rating on purpose.
+    private let writeReviewURL = URL(string: "https://apps.apple.com/app/id6785576912?action=write-review")!
 
     /// Prefilled mailto: link for community-submitted Featured Walk suggestions.
     /// Users tap "Suggest a Featured Walk" -> compose a pre-templated email to
@@ -330,6 +335,23 @@ struct AboutTabView: View {
                                 .foregroundStyle(Natural.ink)
                             Spacer()
                             Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    Link(destination: writeReviewURL) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "star.bubble")
+                                .foregroundStyle(Natural.route)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Rate Woodlands Trail Guide")
+                                    .foregroundStyle(Natural.ink)
+                                Text("Ratings help other Woodlands walkers find the app.")
+                                    .font(.caption)
+                                    .foregroundStyle(Natural.inkMuted)
+                            }
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
                                 .font(.caption)
                                 .foregroundStyle(.tertiary)
                         }

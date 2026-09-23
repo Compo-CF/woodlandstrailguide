@@ -263,6 +263,23 @@ final class UserDataStore {
         }
         return true
     }
+
+    /// True once the user has done something in the app beyond opening it.
+    ///
+    /// Apple only presents ~3 review prompts per user per year no matter how
+    /// often requestReview() is called, so each call is a scarce resource.
+    /// Spending one on somebody who launched a few times but never routed,
+    /// favorited, or logged a walk both wastes the quota and invites a
+    /// low-star rating from a user who hasn't gotten value yet. The
+    /// appLaunches fallback keeps the door open for the browse-only user who
+    /// clearly keeps coming back — they're engaged, just not via these
+    /// specific features.
+    var hasMeaningfulEngagement: Bool {
+        routesCompleted > 0
+            || !tripLog.isEmpty
+            || !favoriteWayIDs.isEmpty
+            || appLaunches >= 5
+    }
 }
 
 struct TripStats: Hashable {

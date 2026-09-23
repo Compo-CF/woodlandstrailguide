@@ -98,7 +98,9 @@ struct ContentView: View {
     private func considerEngagementPrompts() {
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(2))
-            if userData.appLaunches >= 3 && userData.eligibleForReviewRequest {
+            if userData.appLaunches >= 3
+                && userData.hasMeaningfulEngagement
+                && userData.eligibleForReviewRequest {
                 requestReview()
                 userData.markReviewRequested()
             } else if userData.shouldShowKofiPrompt {
