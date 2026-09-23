@@ -559,6 +559,23 @@ struct MapTabView: View {
     /// distance or time from the user's location. Uses waypoint routing
     /// under the hood — start = end, with a far waypoint chosen at
     /// approximately target-distance / 2 — see updateRoute(graph:).
+    /// How close to target still counts as "we got you what you asked for".
+    /// Routes are built from real graph edges, so landing a bit under is
+    /// normal and shouldn't trigger a warning; this only catches genuine
+    /// shortfalls.
+    private let shortfallThreshold: Double = 0.75
+
+    private func shortfallMessage(for plan: RoutePlan) -> String {
+        switch plan.surfacePreference {
+        case .natural:
+            return "Not enough connected natural-surface trail near the start for that distance — this is the longest one available. Try Any surface for a longer route."
+        case .paved:
+            return "Not enough connected paved pathway near the start for that distance — this is the longest one available. Try Any surface for a longer route."
+        case .any:
+            return "The pathway network near the start doesn't connect into a route that long — this is the longest one available. Try starting somewhere more central."
+        }
+    }
+
     private var plannerButton: some View {
         Button {
             plannerDraft = nil
@@ -811,6 +828,21 @@ struct MapTabView: View {
                 }
                 .font(.caption.weight(.medium))
                 .foregroundStyle(Natural.forest)
+
+                // Say so when the network couldn't supply the requested
+                // distance. Restricting to Natural trails near a spot with
+                // little unpaved mileage can land far short of target — the
+                // "Planned 5.0 mi" line above then reads as a broken promise
+                // next to a 0.9 mi route, with nothing explaining the gap.
+                if r.lengthMeters < plan.targetMeters * shortfallThreshold {
+                    HStack(alignment: .top, spacing: 5) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                        Text(shortfallMessage(for: plan))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Natural.route)
+                }
             }
 
             if let graph = store.graph, let loc = locationManager.location {

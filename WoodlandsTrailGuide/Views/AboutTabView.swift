@@ -21,6 +21,10 @@ struct AboutTabView: View {
     /// and it alone decides whether to actually show) — this row is the only
     /// path a motivated user has to leave a rating on purpose.
     private let writeReviewURL = URL(string: "https://apps.apple.com/app/id6785576912?action=write-review")!
+    /// The local newsletter this app's audience overlaps with almost
+    /// exactly. Costs one row here and moves readers to a channel we own,
+    /// which is worth more than another App Store cross-promo.
+    private let dispatchURL = URL(string: "https://thewoodlandsdispatch.com")!
 
     /// Prefilled mailto: link for community-submitted Featured Walk suggestions.
     /// Users tap "Suggest a Featured Walk" -> compose a pre-templated email to
@@ -347,6 +351,23 @@ struct AboutTabView: View {
                                 Text("Rate Woodlands Trail Guide")
                                     .foregroundStyle(Natural.ink)
                                 Text("Ratings help other Woodlands walkers find the app.")
+                                    .font(.caption)
+                                    .foregroundStyle(Natural.inkMuted)
+                            }
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    Link(destination: dispatchURL) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "newspaper")
+                                .foregroundStyle(Natural.forest)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("The Woodlands Dispatch")
+                                    .foregroundStyle(Natural.ink)
+                                Text("Local news, trails and food — free newsletter from the same author.")
                                     .font(.caption)
                                     .foregroundStyle(Natural.inkMuted)
                             }
