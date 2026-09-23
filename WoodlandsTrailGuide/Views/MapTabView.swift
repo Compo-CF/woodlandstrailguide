@@ -21,6 +21,9 @@ struct MapTabView: View {
     @State private var showingWeather = false
     @State private var showingSearch = false
     @State private var showingRoutePlanner = false
+    /// Set on arrival to present the shareable walk-summary card. Non-nil
+    /// drives the sheet; dismissing clears it.
+    @State private var walkSummary: WalkSummary?
     /// Stashed RoutePlannerSheet selections while the user is off tapping a
     /// starting point on the map (see awaitingPlannerTap below) — restored
     /// as the sheet's initialDraft when it reopens.
@@ -196,6 +199,22 @@ struct MapTabView: View {
                                     distanceMeters: r.lengthMeters,
                                     durationSeconds: duration ?? (r.lengthMeters / 1609.344 / userData.travelMode.paceMph * 3600),
                                     travelMode: userData.travelMode
+                                )
+                            }
+                            // Offer the shareable card. Built from the route
+                            // that was actually walked, so the trace on the
+                            // card matches what the map just showed.
+                            if let graph = store.graph {
+                                walkSummary = WalkSummary(
+                                    distanceMeters: r.lengthMeters,
+                                    durationSeconds: duration,
+                                    travelMode: userData.travelMode,
+                                    segmentNames: r.namedSegments.map { $0.name },
+                                    parks: r.parks,
+                                    coordinates: r.nodes.compactMap { idx in
+                                        idx < graph.nodes.count ? graph.nodes[idx].clCoord : nil
+                                    },
+                                    date: .now
                                 )
                             }
                         }
@@ -448,6 +467,9 @@ struct MapTabView: View {
                 wayName: selectedWay?.name,
                 userLocation: locationManager.location
             )
+        }
+        .sheet(item: $walkSummary) { summary in
+            WalkSummarySheet(summary: summary)
         }
         .sheet(isPresented: $showingWildlifeSighting) {
             WildlifeSightingSheet(userLocation: locationManager.location)
