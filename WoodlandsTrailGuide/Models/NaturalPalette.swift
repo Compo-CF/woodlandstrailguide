@@ -13,11 +13,19 @@ enum Natural {
     // MARK: - Surfaces
 
     /// Floating-card background. Light: warm cream. Dark: deep forest.
-    /// Slight translucency in both modes so the map shows through gently.
+    ///
+    /// Opaque, deliberately. This used to carry a little translucency
+    /// (0.94/0.92) so the map "showed through gently" — a nice idea that
+    /// doesn't survive contact with a dense map: over the trail network the
+    /// route summary card let pin bubbles and street labels bleed up
+    /// through its own text, so the card read as cluttered rather than
+    /// layered. Separation now comes from elevation
+    /// (NaturalType.Metrics.shadowFloating) instead, which is what actually
+    /// communicates "this sits above the map" without costing legibility.
     static let cardBg = Color(uiColor: UIColor { tc in
         tc.userInterfaceStyle == .dark
-            ? UIColor(red: 0.085, green: 0.135, blue: 0.105, alpha: 0.92)
-            : UIColor(red: 0.965, green: 0.930, blue: 0.842, alpha: 0.94)
+            ? UIColor(red: 0.085, green: 0.135, blue: 0.105, alpha: 1.0)
+            : UIColor(red: 0.965, green: 0.930, blue: 0.842, alpha: 1.0)
     })
 
     /// Pill/chip background (resting on a card).

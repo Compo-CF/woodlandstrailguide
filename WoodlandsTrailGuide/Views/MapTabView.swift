@@ -990,12 +990,18 @@ struct MapTabView: View {
     private func bannerCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         content()
             .padding(.horizontal, 16).padding(.vertical, 14)
-            .background(Natural.cardBg, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(Natural.cardBg,
+                        in: RoundedRectangle(cornerRadius: NaturalType.Metrics.radiusLarge,
+                                             style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: NaturalType.Metrics.radiusLarge,
+                                 style: .continuous)
                     .strokeBorder(Natural.hairline, lineWidth: 0.5)
             )
-            .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+            // Elevation now does the work the old translucency was doing —
+            // and from the shared scale, so this card and every other
+            // map-floating surface separate from the tiles identically.
+            .naturalFloatingShadow()
             .padding(.horizontal, 12)
             .padding(.bottom, 14)
     }
