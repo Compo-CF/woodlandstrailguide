@@ -42,6 +42,15 @@ targets:
         CFBundleShortVersionString: "1.5"
         CFBundleVersion: "2"
         CFBundleIconName: AppIcon
+        # Fraunces (SIL Open Font License 1.1) — the display face. Static
+        # instances pulled from Google Fonts rather than the variable
+        # original: iOS can load a variable TTF but gives no reliable way to
+        # pin an axis, so a variable file renders at its default weight and
+        # silently ignores the weight asked for.
+        UIAppFonts:
+          - Fraunces-Medium.ttf
+          - Fraunces-SemiBold.ttf
+          - Fraunces-Bold.ttf
         UILaunchScreen:
           UIColorName: ""
         NSLocationWhenInUseUsageDescription: Used to show your position on the trails and find nearby trailheads.

@@ -106,7 +106,7 @@ struct RoutePlannerSheet: View {
 
                     VStack(spacing: 6) {
                         Text("Plan a walk, jog, or run")
-                            .font(.title3.bold())
+                            .font(NaturalType.title)
                             .foregroundStyle(Natural.ink)
                         Text("Set a target and we'll build a route to match.")
                             .font(.callout)

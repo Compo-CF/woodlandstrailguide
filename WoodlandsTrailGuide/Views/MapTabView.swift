@@ -792,8 +792,11 @@ struct MapTabView: View {
     private func routeSummaryCard(_ r: Router.Route) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
+                // The one number the card exists to communicate — given the
+                // display face so it reads as a figure on a sign rather than
+                // another line of UI text.
                 Text(String(format: "%.2f mi", r.lengthMeters / 1609.344))
-                    .font(.title3.bold().monospacedDigit())
+                    .font(NaturalType.display(30, weight: .bold, relativeTo: .title))
                     .foregroundStyle(Natural.ink)
                 Text("• \(travelTime(meters: r.lengthMeters)) \(userData.travelMode.noun)")
                     .font(.subheadline).foregroundStyle(Natural.inkMuted)
