@@ -94,6 +94,13 @@ enum Natural {
     /// route line.
     static let waypointPinUI = UIColor(red: 0.76, green: 0.55, blue: 0.20, alpha: 1.0)
 
+    /// POI cluster bubbles. MapKit's default cluster view is system red,
+    /// which is both the loudest thing on the map and the one element that
+    /// obviously isn't ours — a stock-framework tell sitting in the middle
+    /// of a brown/green/cream palette. A deeper forest than `forest` so the
+    /// white count stays legible at 28pt.
+    static let clusterUI = UIColor(red: 0.105, green: 0.395, blue: 0.225, alpha: 1.0)
+
     /// Off-white used inside waypoint and POI pin rings. Slightly warm so
     /// the markers don't look stark against the cream-leaning UI.
     static let pinRingUI = UIColor(red: 0.985, green: 0.970, blue: 0.935, alpha: 1.0)

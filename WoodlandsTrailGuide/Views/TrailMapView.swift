@@ -78,6 +78,8 @@ struct TrailMapView: UIViewRepresentable {
                          forAnnotationViewWithReuseIdentifier: WaypointAnnotationView.reuseID)
         mapView.register(POIAnnotationView.self,
                          forAnnotationViewWithReuseIdentifier: POIAnnotationView.reuseID)
+        mapView.register(POIClusterAnnotationView.self,
+                         forAnnotationViewWithReuseIdentifier: POIClusterAnnotationView.reuseID)
         return mapView
     }
 
@@ -369,6 +371,17 @@ struct TrailMapView: UIViewRepresentable {
                 v?.configure(for: poi)
                 return v
             }
+            // Handled explicitly rather than relying on returning nil and
+            // letting MapKit fall back to a registered default — this way
+            // the branded view is used whatever the fallback semantics.
+            if let cluster = annotation as? MKClusterAnnotation {
+                let v = mapView.dequeueReusableAnnotationView(
+                    withIdentifier: POIClusterAnnotationView.reuseID,
+                    for: cluster
+                ) as? POIClusterAnnotationView
+                v?.configure(for: cluster)
+                return v
+            }
             return nil
         }
 
@@ -655,6 +668,49 @@ final class POIAnnotationView: MKAnnotationView {
                 )
                 symbol.draw(in: iconRect)
             }
+        }
+    }
+}
+
+/// Branded replacement for MapKit's default cluster bubble.
+///
+/// Without this, clustered POIs render as system-red circles — the single
+/// most obviously un-designed element in the app, and it sits on the map,
+/// which is the screen users spend all their time on.
+final class POIClusterAnnotationView: MKAnnotationView {
+    static let reuseID = "POICluster"
+
+    func configure(for cluster: MKClusterAnnotation) {
+        canShowCallout = false
+        // Above individual pins: a cluster stands for several of them, so
+        // it should never be the thing MapKit drops when space is tight.
+        displayPriority = .defaultHigh
+
+        let count = cluster.memberAnnotations.count
+        let text = count > 99 ? "99+" : "\(count)"
+        // Two sizes only. Scaling continuously with the count makes a map
+        // of mixed clusters look noisy rather than ordered.
+        let size: CGFloat = count >= 10 ? 34 : 29
+        frame = CGRect(x: 0, y: 0, width: size, height: size)
+        centerOffset = .zero
+
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+        image = renderer.image { _ in
+            let rect = CGRect(x: 0, y: 0, width: size, height: size)
+            Natural.pinRingUI.setFill()
+            UIBezierPath(ovalIn: rect).fill()
+            Natural.clusterUI.setFill()
+            UIBezierPath(ovalIn: rect.insetBy(dx: 2.5, dy: 2.5)).fill()
+
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: size * 0.40, weight: .bold),
+                .foregroundColor: UIColor.white,
+            ]
+            let s = text as NSString
+            let sz = s.size(withAttributes: attrs)
+            s.draw(at: CGPoint(x: (size - sz.width) / 2,
+                               y: (size - sz.height) / 2 - 0.5),
+                   withAttributes: attrs)
         }
     }
 }
