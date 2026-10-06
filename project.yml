@@ -51,8 +51,13 @@ targets:
           - Fraunces-Medium.ttf
           - Fraunces-SemiBold.ttf
           - Fraunces-Bold.ttf
+        # The system renders this BEFORE any app code runs, so it cannot be
+        # animated. Its only job is to match the first frame of SplashView
+        # exactly, so the handoff from system launch screen to our animated
+        # splash is invisible. Previously empty, which meant a white flash
+        # on every cold start.
         UILaunchScreen:
-          UIColorName: ""
+          UIColorName: LaunchBackground
         NSLocationWhenInUseUsageDescription: Used to show your position on the trails and find nearby trailheads.
         NSUserTrackingUsageDescription: Used to show relevant ads that help keep this app free and updated.
         NSPhotoLibraryUsageDescription: Used only when you tap "Add a photo" on a point of interest — photos stay on your device and are never uploaded.

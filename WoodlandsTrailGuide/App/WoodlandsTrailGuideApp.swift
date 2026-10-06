@@ -29,7 +29,11 @@ struct WoodlandsTrailGuideApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            // Splash covers the real cost of first launch — TrailStore
+            // parsing the graph — and dismisses the moment it's ready.
+            SplashGate(isReady: store.graph != nil) {
+                ContentView()
+            }
                 .environment(store)
                 .environment(poiStore)
                 .environment(locationManager)
