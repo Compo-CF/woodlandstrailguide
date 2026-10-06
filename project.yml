@@ -39,7 +39,7 @@ targets:
       path: WoodlandsTrailGuide/Info.plist
       properties:
         CFBundleDisplayName: WTG
-        CFBundleShortVersionString: "1.6"
+        CFBundleShortVersionString: "1.7"
         CFBundleVersion: "1"
         CFBundleIconName: AppIcon
         # Fraunces (SIL Open Font License 1.1) — the display face. Static
