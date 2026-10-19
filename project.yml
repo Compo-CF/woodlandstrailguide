@@ -40,7 +40,10 @@ targets:
       properties:
         CFBundleDisplayName: WTG
         CFBundleShortVersionString: "1.8"
-        CFBundleVersion: "1"
+        # Driven by scripts/testflight.sh via CURRENT_PROJECT_VERSION (git
+        # commit count). A literal here silently wins over the command-line
+        # override and ships the wrong build number.
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleIconName: AppIcon
         # Fraunces (SIL Open Font License 1.1) — the display face. Static
         # instances pulled from Google Fonts rather than the variable
