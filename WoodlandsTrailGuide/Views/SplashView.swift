@@ -38,7 +38,7 @@ struct SplashView: View {
                     .frame(width: 190, height: 96)
 
                 VStack(spacing: 6) {
-                    Text("Woodlands Trail Guide")
+                    Text("The Woodlands Trail Guide")
                         .font(NaturalType.display(26, weight: .semibold, relativeTo: .title2))
                         .foregroundStyle(cream)
                     Text("THE WOODLANDS, TEXAS")
@@ -54,7 +54,7 @@ struct SplashView: View {
         // One announcement to VoiceOver rather than a pile of decorative
         // fragments.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Woodlands Trail Guide, loading")
+        .accessibilityLabel("The Woodlands Trail Guide, loading")
     }
 
     /// A meandering path with a marker at its end — a trail, drawn.

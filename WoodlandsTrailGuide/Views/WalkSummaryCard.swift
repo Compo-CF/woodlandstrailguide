@@ -80,7 +80,7 @@ struct WalkSummaryCard: View {
         HStack(spacing: 16) {
             Image(systemName: "figure.hiking")
                 .font(.system(size: 40, weight: .semibold))
-            Text("WOODLANDS TRAIL GUIDE")
+            Text("THE WOODLANDS TRAIL GUIDE")
                 .font(.system(size: 30, weight: .bold))
                 .tracking(3)
         }

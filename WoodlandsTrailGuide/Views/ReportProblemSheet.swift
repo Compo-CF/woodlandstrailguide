@@ -98,7 +98,7 @@ struct ReportProblemSheet: View {
         lines.append(description)
         lines.append("")
         lines.append("---")
-        lines.append("Sent from Woodlands Trail Guide")
+        lines.append("Sent from The Woodlands Trail Guide")
         return lines.joined(separator: "\n")
     }
 }

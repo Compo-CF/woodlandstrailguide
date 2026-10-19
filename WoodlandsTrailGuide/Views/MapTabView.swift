@@ -1295,7 +1295,7 @@ struct MapTabView: View {
         let miles = String(format: "%.2f", remaining / 1609.344)
         let time = travelTime(meters: remaining)
         let verb = userData.travelMode.gerund
-        return "I'm currently \(verb) in The Woodlands — \(miles) mi and about \(time) left. Open this link in Woodlands Trail Guide to see the route."
+        return "I'm currently \(verb) in The Woodlands — \(miles) mi and about \(time) left. Open this link in the Trail Guide app to see the route."
     }
 
     private func shareMessage(for r: Router.Route) -> String {
@@ -1308,7 +1308,7 @@ struct MapTabView: View {
         if let firstLeg, let lastLeg, firstLeg != lastLeg {
             msg += " Starts on \(firstLeg), ends on \(lastLeg)."
         }
-        msg += " Open this link in Woodlands Trail Guide to route it."
+        msg += " Open this link in the Trail Guide app to route it."
         return msg
     }
 

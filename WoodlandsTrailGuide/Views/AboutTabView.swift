@@ -30,9 +30,9 @@ struct AboutTabView: View {
     /// Users tap "Suggest a Featured Walk" -> compose a pre-templated email to
     /// Anthony with the fields we need to add the walk to FeaturedWalks.json.
     private var suggestWalkMailURL: URL {
-        let subject = "Featured Walk suggestion — Woodlands Trail Guide"
+        let subject = "Featured Walk suggestion — The Woodlands Trail Guide"
         let body = """
-        Suggest a walk to add to Featured Walks in Woodlands Trail Guide.
+        Suggest a walk to add to Featured Walks in The Woodlands Trail Guide.
 
         Name of the walk:
         (e.g. "Panther Creek Sunset Loop")
@@ -348,7 +348,7 @@ struct AboutTabView: View {
                             Image(systemName: "star.bubble")
                                 .foregroundStyle(Natural.route)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Rate Woodlands Trail Guide")
+                                Text("Rate The Woodlands Trail Guide")
                                     .foregroundStyle(Natural.ink)
                                 Text("Ratings help other Woodlands walkers find the app.")
                                     .font(.caption)

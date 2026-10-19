@@ -72,7 +72,7 @@ struct ContentView: View {
             Button("Maybe later", role: .cancel) {}
             Button("Send a tip") { showingTipJar = true }
         } message: {
-            Text("Woodlands Trail Guide is built and maintained by one local on weekends. If it's been useful, consider sending a tip to help keep it going.")
+            Text("The Woodlands Trail Guide is built and maintained by one local on weekends. If it's been useful, consider sending a tip to help keep it going.")
         }
         .sheet(isPresented: $showingTipJar) {
             TipJarSheet()
