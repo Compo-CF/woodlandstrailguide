@@ -114,6 +114,10 @@ struct MapTabView: View {
     /// thing the app does. The store's revision counter is the cache key.
     @State private var coverageRunsCache: [[CLLocationCoordinate2D]] = []
     @State private var coverageRunsRevision = -1
+
+    /// A milestone waiting to be acknowledged, surfaced after a walk ends.
+    @State private var coverageMilestone: CoverageMilestone?
+    @State private var showingCoverage = false
     /// Live progress along the active route, recomputed on every location fix.
     @State private var routeProgress: RouteProgress?
     /// First-time intro sheet explaining the routing flow.
@@ -368,6 +372,43 @@ struct MapTabView: View {
                     .frame(maxWidth: .infinity)
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
+
+                // A toast rather than a sheet, deliberately. Arriving at a
+                // destination already auto-presents WalkSummarySheet, and two
+                // modals racing each other at the end of a walk would be a
+                // fight the user has to win twice. This waits to be tapped.
+                if let milestone = coverageMilestone {
+                    VStack {
+                        Spacer()
+                        Button {
+                            coverageStore.markCelebrated(milestone)
+                            coverageMilestone = nil
+                            showingCoverage = true
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "map.fill")
+                                    .font(.subheadline.weight(.bold))
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(milestone.title)
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(milestone.detail)
+                                        .font(.caption2)
+                                        .foregroundStyle(.white.opacity(0.85))
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(.white.opacity(0.85))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16).padding(.vertical, 10)
+                            .background(Natural.route, in: Capsule())
+                            .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
+                        }
+                        .padding(.bottom, 108)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             } else {
                 loadingOrError
             }
@@ -377,6 +418,7 @@ struct MapTabView: View {
         .animation(.easeInOut(duration: 0.22), value: navigationActive)
         .animation(.easeInOut(duration: 0.28), value: showingReroutedToast)
         .animation(.easeInOut(duration: 0.28), value: toastAchievement)
+        .animation(.easeInOut(duration: 0.28), value: coverageMilestone)
         .animation(.easeInOut(duration: 0.22), value: awaitingPlannerTap)
         .onAppear {
             locationManager.requestPermission()
@@ -433,6 +475,9 @@ struct MapTabView: View {
                 TrailDataUnavailableSheet()
                     .presentationDetents([.height(220)])
             }
+        }
+        .sheet(isPresented: $showingCoverage) {
+            CoverageSheet()
         }
         .sheet(isPresented: $showingSearch) {
             if let graph = store.graph {
@@ -716,6 +761,7 @@ struct MapTabView: View {
                     locationManager.stopRecording()
                     coverageStore.saveIfNeeded()
                     coverageStore.resetTrace()
+                    coverageMilestone = coverageStore.pendingMilestone()
                 } else {
                     coverageStore.resetTrace()
                     locationManager.startRecording()
@@ -1439,6 +1485,7 @@ struct MapTabView: View {
         coverageStore.saveIfNeeded()
         coverageStore.resetTrace()
         coverageStore.routeHint = []
+        coverageMilestone = coverageStore.pendingMilestone()
 
         routingMode = false
         navigationActive = false

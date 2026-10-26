@@ -2,6 +2,15 @@ import Foundation
 import CoreLocation
 import Observation
 
+/// A moment worth telling the user about, and the one moment they might
+/// want to post. Identified by a stable `key` so it is only ever shown once.
+struct CoverageMilestone: Identifiable, Hashable {
+    let key: String
+    let title: String
+    let detail: String
+    var id: String { key }
+}
+
 /// How much of one bucket of the network has been walked.
 struct CoverageProgress {
     let name: String
@@ -358,6 +367,63 @@ final class CoverageStore {
         .sorted { $0.totalMeters > $1.totalMeters }
     }
 
+    // MARK: - Milestones
+
+    /// Milestones already shown, so none is celebrated twice.
+    private(set) var celebratedMilestones: Set<String> = []
+
+    /// The most significant milestone reached but not yet celebrated.
+    ///
+    /// Overall progress every 10%, and each village at halfway and done.
+    ///
+    /// The scope said "first village finished". On its own that is close to
+    /// unreachable: a village is 100+ ways, some of them stubs that dead-end
+    /// at a fence, and 0.999 of all of them is not a goal anyone will hit.
+    /// Halfway is a real milestone somebody reaches in a season, and without
+    /// it village-level progress would never say anything at all.
+    func pendingMilestone() -> CoverageMilestone? {
+        let overall = overallProgress()
+        guard overall.coveredMeters > 0 else { return nil }
+
+        // Biggest first: finishing a village on the same walk that crosses
+        // 30% should announce the village, not the decade.
+        for village in progressByVillage() where village.isComplete {
+            let key = "village-done-\(village.name)"
+            if !celebratedMilestones.contains(key) {
+                return CoverageMilestone(key: key,
+                                         title: "\(village.name) complete",
+                                         detail: "You've walked all of it.")
+            }
+        }
+        for village in progressByVillage() where village.fraction >= 0.5 {
+            let key = "village-half-\(village.name)"
+            if !celebratedMilestones.contains(key) {
+                return CoverageMilestone(key: key,
+                                         title: "Halfway through \(village.name)",
+                                         detail: String(format: "%.1f of %.1f miles.",
+                                                        village.coveredMiles,
+                                                        village.totalMiles))
+            }
+        }
+        let decade = Int(overall.fraction * 10) * 10
+        if decade >= 10 {
+            let key = "overall-\(decade)"
+            if !celebratedMilestones.contains(key) {
+                return CoverageMilestone(key: key,
+                                         title: "\(decade)% of The Woodlands",
+                                         detail: String(format: "%.1f miles walked.",
+                                                        overall.coveredMiles))
+            }
+        }
+        return nil
+    }
+
+    func markCelebrated(_ milestone: CoverageMilestone) {
+        guard celebratedMilestones.insert(milestone.key).inserted else { return }
+        isDirty = true
+        saveIfNeeded()
+    }
+
     /// Progress across the whole network.
     func overallProgress() -> CoverageProgress {
         let parts = progressByVillage()
@@ -373,6 +439,10 @@ final class CoverageStore {
     private struct Payload: Codable {
         var version: Int
         var bins: [String: [UInt16]]
+        /// Optional so a file written before milestones existed still
+        /// decodes. A user who had already walked half of Panther Creek
+        /// should not have the app refuse to open their coverage.
+        var celebrated: [String]?
     }
 
     private func load() {
@@ -380,6 +450,7 @@ final class CoverageStore {
               let payload = try? JSONDecoder().decode(Payload.self, from: data)
         else { return }
         bins = payload.bins.mapValues(Set.init)
+        celebratedMilestones = Set(payload.celebrated ?? [])
         revision += 1
     }
 
@@ -387,7 +458,9 @@ final class CoverageStore {
     /// walk and on backgrounding; a no-op when nothing moved.
     func saveIfNeeded() {
         guard isDirty else { return }
-        let payload = Payload(version: 1, bins: bins.mapValues { Array($0).sorted() })
+        let payload = Payload(version: 1,
+                              bins: bins.mapValues { Array($0).sorted() },
+                              celebrated: celebratedMilestones.sorted())
         guard let data = try? JSONEncoder().encode(payload) else { return }
         do {
             try data.write(to: Self.fileURL, options: .atomic)
@@ -403,6 +476,7 @@ final class CoverageStore {
     /// is months of someone's walking.
     func reset() {
         bins = [:]
+        celebratedMilestones = []
         resetTrace()
         revision += 1
         isDirty = true
