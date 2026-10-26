@@ -665,7 +665,11 @@ struct Router {
 
     /// Equirectangular projection of point P onto segment A→B at the
     /// midpoint latitude. Returns (perpendicular distance m, t in [0,1]).
-    private static func projectionDistance(
+    ///
+    /// Internal rather than private so `CoverageGrid` can match GPS fixes to
+    /// the network using the same maths the navigator uses to track progress
+    /// along a route. Two copies of this would drift apart.
+    static func projectionDistance(
         lat: Double, lon: Double,
         aLat: Double, aLon: Double,
         bLat: Double, bLon: Double

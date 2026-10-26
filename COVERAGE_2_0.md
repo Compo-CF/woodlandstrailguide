@@ -207,6 +207,42 @@ A naïve measurement that includes junction neighbours reports 16 % within
 10 m. That number is misleading and should not be used to justify design
 changes.
 
+### Simulated against the real graph
+
+Step 2 is built and the matcher was run over 25 random 2.5 km walks through
+the actual adjacency list, with fixes every ~3 m carrying 5 m Gaussian noise
+and a reported accuracy of 8 m:
+
+```
+fixes matched                    98.6 %
+credited distance / walked       0.98 (median)
+ways walked and credited          148
+ways credited but NOT walked       18   <-- the problem
+```
+
+The false positives are **junction brush-past**: a noisy fix near an
+intersection lands on the crossing way. The ambiguity rule cannot catch these
+because it deliberately exempts ways that share a node — without that
+exemption, matching would be suppressed at every intersection in the network.
+
+Fixed in `CoverageStore` with a confirmation count rather than in the grid:
+
+| Confirming fixes | Walked + credited | Credited, not walked | …of those, marked **complete** | Coverage ratio |
+|---:|---:|---:|---:|---:|
+| 1 | 148 | 18 | 2 | 0.98 |
+| 2 | 146 | 14 | 2 | 0.98 |
+| **3** | **146** | **12** | **1** | **0.98** |
+| 4 | 144 | 12 | 1 | 0.97 |
+
+Three is the setting. What matters is the fourth column, not the third: a
+false positive that keeps one stray bin is a sliver of partial coverage on a
+path whose mouth you really did step on, which is defensible. A way falsely
+marked *complete* is not, and that drops to one per 25 walks. The cost is two
+genuinely-walked ways out of 148.
+
+Bins stay pending per walk and are cleared by `resetTrace()` — a way brushed
+once today and once next week is two brushes, not a walk.
+
 ---
 
 ## 4. The recording question — needs a product decision
