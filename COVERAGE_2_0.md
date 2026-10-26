@@ -258,7 +258,18 @@ Three options:
 |---|---|---|
 | **A. Navigation only** | Only routed walks | Nearly free — hook the existing stream. Under-counts badly. |
 | **B. Foreground only** | Walks with the app open and awake | Free-ish, but nobody walks with the screen on for 45 minutes. |
-| **C. Explicit "Record walk"** | Everything the user chooses to record | `UIBackgroundModes: location`, `NSLocationAlwaysAndWhenInUseUsageDescription`, blue status bar, battery, App Store review justification. |
+| **C. Explicit "Record walk"** | Everything the user chooses to record | `UIBackgroundModes: location`, blue status bar, battery, App Store review justification. |
+
+> **Correction (built 2026-10-26).** This table originally listed
+> `NSLocationAlwaysAndWhenInUseUsageDescription` as a cost of option C. That
+> was wrong. `allowsBackgroundLocationUpdates` works under plain
+> **When-In-Use** authorisation as long as `showsBackgroundLocationIndicator`
+> is set, so recording continues with the screen off and the user never sees
+> an "Always Allow" prompt. The blue status-bar indicator is the whole of the
+> trade, and it is a good one: the user can see at any moment, without opening
+> the app, that it is still tracking. Option C is materially cheaper than this
+> section priced it, which mattered because that price was the main argument
+> against it.
 
 **Recommendation: C**, with recording auto-starting when navigation starts so
 routed walks need no extra tap. This is the standard fitness-app pattern, is
