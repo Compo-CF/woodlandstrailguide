@@ -82,6 +82,14 @@ final class CoverageStore {
     private var sessionHits: [Int: Int] = [:]
     private var pendingBins: [Int: Set<UInt16>] = [:]
 
+    /// Ways of the active route, if any.
+    ///
+    /// Held here rather than passed per fix because recording outlives the
+    /// map: a walk continues while the user is reading the About tab or has
+    /// the screen off, and the view that knows the route is not involved in
+    /// those moments. MapTabView sets this when the route changes.
+    var routeHint: Set<Int> = []
+
     private var isDirty = false
 
     private static var fileURL: URL {
@@ -127,10 +135,10 @@ final class CoverageStore {
     /// `routeWays` is the set of ways on the active route, if navigating —
     /// passed to the grid as a disambiguation hint.
     @discardableResult
-    func record(_ location: CLLocation, routeWays: Set<Int> = []) -> Int? {
+    func record(_ location: CLLocation, routeWays: Set<Int>? = nil) -> Int? {
         guard let grid, let graph else { return nil }
 
-        var preferred = routeWays
+        var preferred = routeWays ?? routeHint
         if let lastMatchedWay { preferred.insert(lastMatchedWay) }
 
         guard let match = grid.match(location, preferring: preferred) else {

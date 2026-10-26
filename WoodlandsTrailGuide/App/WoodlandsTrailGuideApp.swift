@@ -71,6 +71,14 @@ struct WoodlandsTrailGuideApp: App {
                 }
                 .onChange(of: locationManager.location) { _, newValue in
                     store.userLocation = newValue
+                    // Recording lives here rather than in MapTabView because a
+                    // walk outlives the map: the user can be reading the About
+                    // tab or have the screen off entirely, and the fixes still
+                    // have to land. Gated on isRecording, which is only ever
+                    // true because the user started a walk.
+                    if locationManager.isRecording, let loc = newValue {
+                        coverageStore.record(loc)
+                    }
                 }
                 .task(id: locationManager.authorizationStatus) {
                     // Chain the App Tracking Transparency request to fire AFTER

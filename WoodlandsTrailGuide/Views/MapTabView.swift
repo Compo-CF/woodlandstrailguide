@@ -102,6 +102,10 @@ struct MapTabView: View {
     /// disambiguation hint. Computed when the route changes rather than per
     /// GPS fix — a long route is a thousand nodes.
     @State private var routeWayIndices: Set<Int> = []
+
+    /// Whether this screen started the recording, so ending navigation knows
+    /// whether ending the recording is its business.
+    @State private var recordingStartedByNavigation = false
     /// Live progress along the active route, recomputed on every location fix.
     @State private var routeProgress: RouteProgress?
     /// First-time intro sheet explaining the routing flow.
@@ -249,6 +253,7 @@ struct MapTabView: View {
                     directionsToggle
                     mapStyleToggle
                     recenterButton
+                    recordToggle
                     plannerButton
                     moreMenuButton
                 }
@@ -674,6 +679,41 @@ struct MapTabView: View {
                 .mapControlChrome(Circle())
         }
         .accessibilityLabel("Recenter on my location")
+    }
+
+    /// Start or stop recording a walk without routing one.
+    ///
+    /// This is the control that makes coverage honest. Most walks are not
+    /// navigated — people walk their usual loop without asking anyone for
+    /// directions — and a map that only filled in on routed walks would be
+    /// wrong in a way users would notice long before they understood why.
+    ///
+    /// Hidden while navigating, which records on its own; two competing
+    /// stop buttons would only raise the question of which one really stops.
+    @ViewBuilder
+    private var recordToggle: some View {
+        if !navigationActive {
+            Button {
+                if locationManager.isRecording {
+                    locationManager.stopRecording()
+                    coverageStore.saveIfNeeded()
+                    coverageStore.resetTrace()
+                } else {
+                    coverageStore.resetTrace()
+                    locationManager.startRecording()
+                }
+            } label: {
+                Image(systemName: locationManager.isRecording
+                      ? "stop.circle.fill" : "record.circle")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(locationManager.isRecording ? Natural.route : Natural.forest)
+                    .frame(width: 44, height: 44)
+                    .mapControlChrome(Circle())
+            }
+            .accessibilityLabel(locationManager.isRecording
+                                ? "Stop recording this walk"
+                                : "Record this walk")
+        }
     }
 
     // MARK: - Bottom routing card (pre-walk)
@@ -1184,6 +1224,7 @@ struct MapTabView: View {
         }
         route = r
         routeWayIndices = r.map { router.wayIndices(along: $0) } ?? []
+        coverageStore.routeHint = routeWayIndices
         if let r, let catalog = poiStore.pois {
             let coords = r.nodes.map { graph.nodes[$0].clCoord }
             routePOIs = catalog.poisAlong(
@@ -1202,13 +1243,6 @@ struct MapTabView: View {
               let loc = locationManager.location else {
             return
         }
-
-        // Step 3 of COVERAGE_2_0.md: record only while navigating. That makes
-        // coverage under-count — most walks are not navigated — but it proves
-        // the matcher against real traces without asking for background
-        // location or a new permission first. Recording mode comes after, and
-        // only if this holds up outdoors.
-        coverageStore.record(loc, routeWays: routeWayIndices)
 
         let router = Router(graph: graph)
         let progress = router.progress(along: r, at: loc)
@@ -1259,6 +1293,16 @@ struct MapTabView: View {
         navigationActive = true
         navigationStartedAt = .now
         hasJoinedRoute = false
+
+        // Navigating IS walking, so recording starts with it — nobody should
+        // have to tap Record as well as Start, and a walk that didn't count
+        // because of a missed tap is the fastest way to make coverage feel
+        // broken. Noted so clearRoute knows it may end what it began.
+        if !locationManager.isRecording {
+            locationManager.startRecording()
+            recordingStartedByNavigation = true
+        }
+        coverageStore.resetTrace()
         // Compute initial progress so the banner shows real numbers from the
         // first frame instead of placeholder values pulled from the route —
         // and so hasJoinedRoute reflects reality immediately (the common
@@ -1342,11 +1386,21 @@ struct MapTabView: View {
     }
 
     private func clearRoute() {
-        // The walk is over: write what was recorded, and drop the continuity
-        // hint so the next walk doesn't believe it resumes on the way this
-        // one finished on.
+        // The walk is over: stop recording, write what it produced, and drop
+        // the continuity hint so the next walk doesn't believe it resumes on
+        // the way this one finished on.
+        //
+        // Only stops recording if navigation started it. Somebody who tapped
+        // Record, then happened to route somewhere mid-walk, is still
+        // recording when that route is cleared — ending their walk is theirs
+        // to do, not a side effect of dismissing a route.
+        if recordingStartedByNavigation {
+            locationManager.stopRecording()
+            recordingStartedByNavigation = false
+        }
         coverageStore.saveIfNeeded()
         coverageStore.resetTrace()
+        coverageStore.routeHint = []
 
         routingMode = false
         navigationActive = false

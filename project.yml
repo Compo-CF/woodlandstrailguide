@@ -61,7 +61,16 @@ targets:
         # on every cold start.
         UILaunchScreen:
           UIColorName: LaunchBackground
-        NSLocationWhenInUseUsageDescription: Used to show your position on the trails and find nearby trailheads.
+        NSLocationWhenInUseUsageDescription: Used to show your position on the trails, navigate a route, and record which pathways you've walked.
+        # Recording a walk keeps location running with the screen off.
+        # Deliberately NOT paired with NSLocationAlwaysAndWhenInUse: an app
+        # that tracks only while the user has explicitly started recording
+        # needs allowsBackgroundLocationUpdates, not Always authorization.
+        # When-In-Use plus the blue status-bar indicator is the whole of it,
+        # so there is no second permission prompt and nothing is recorded
+        # while the user isn't recording.
+        UIBackgroundModes:
+          - location
         NSUserTrackingUsageDescription: Used to show relevant ads that help keep this app free and updated.
         NSPhotoLibraryUsageDescription: Used only when you tap "Add a photo" on a point of interest — photos stay on your device and are never uploaded.
         # v1.3: Apple Health sync (opt-in, off by default). We only ever
