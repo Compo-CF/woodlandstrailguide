@@ -31,6 +31,13 @@ struct TrailMapView: UIViewRepresentable {
 
     let pois: POICatalog?
     let polygons: PolygonCatalog?
+
+    /// Walked stretches of the network, one coordinate run per contiguous
+    /// span. Built by CoverageStore; rebuilt here only when `coverageRevision`
+    /// changes, because a walk emits a fix every few metres and regenerating
+    /// this per fix would be unusable.
+    let coverageRuns: [[CLLocationCoordinate2D]]
+    let coverageRevision: Int
     /// Base layer style (.standard / .hybrid / .satellite). The hybrid and
     /// satellite styles swap MapKit's base for Apple's imagery, which makes
     /// our context polygons (parks/lakes) less necessary but still useful
@@ -171,6 +178,8 @@ struct TrailMapView: UIViewRepresentable {
             mapView.addOverlays(overlays, level: .aboveRoads)
             coord.baseOverlays = overlays
             coord.loadedGraphVersion = graph.version
+            // Force the coverage layer to rebuild on top of the new base.
+            coord.appliedCoverageRevision = -1
 
             if !coord.didFitInitial {
                 let bbox = graph.bbox
@@ -187,6 +196,20 @@ struct TrailMapView: UIViewRepresentable {
                 mapView.setRegion(region, animated: false)
                 coord.didFitInitial = true
             }
+        }
+
+        // ---- Coverage (walked stretches, over the base network) ----
+        if coord.appliedCoverageRevision != coverageRevision {
+            mapView.removeOverlays(coord.coverageOverlays)
+            let walked = coverageRuns.compactMap { run -> CoveragePolyline? in
+                guard run.count >= 2 else { return nil }
+                return CoveragePolyline(coordinates: run, count: run.count)
+            }
+            // Above the base trail lines, so a walked pathway reads as
+            // filled-in rather than merely outlined.
+            mapView.addOverlays(walked, level: .aboveRoads)
+            coord.coverageOverlays = walked
+            coord.appliedCoverageRevision = coverageRevision
         }
 
         // ---- Route overlay (rebuild when endpoint nodes change) ----
@@ -277,6 +300,8 @@ struct TrailMapView: UIViewRepresentable {
         var didFitInitial = false
         var loadedGraphVersion = -1
         var baseOverlays: [TrailPolyline] = []
+        var appliedCoverageRevision = -1
+        var coverageOverlays: [CoveragePolyline] = []
         var routeOverlays: [MKOverlay] = []
         var lastRouteSig: String?
         var polygonOverlays: [MKOverlay] = []
@@ -319,6 +344,19 @@ struct TrailMapView: UIViewRepresentable {
                 }
                 r.lineWidth = 1.4
                 r.lineCap = .round
+                return r
+            }
+            if overlay is CoveragePolyline {
+                let r = MKPolylineRenderer(overlay: overlay)
+                // Terracotta, like the active route, because it means the
+                // same thing: this is your path. Narrower than the route so
+                // a live route still reads on top of walked ground, and
+                // slightly translucent so the pathway/trail distinction
+                // underneath is not erased by it.
+                r.strokeColor = Natural.routeUI.withAlphaComponent(0.85)
+                r.lineWidth = 5
+                r.lineCap = .round
+                r.lineJoin = .round
                 return r
             }
             if overlay is RoutePolyline {
@@ -546,6 +584,10 @@ struct TrailMapView: UIViewRepresentable {
 final class TrailPolyline: MKPolyline {
     var way: TrailGraph.Way?
 }
+
+/// A stretch of pathway this user has actually walked. Drawn over the base
+/// network so the map doubles as a record of where they have been.
+final class CoveragePolyline: MKPolyline {}
 
 final class RoutePolyline: MKPolyline {}
 

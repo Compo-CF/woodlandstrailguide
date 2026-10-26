@@ -230,6 +230,104 @@ final class CoverageStore {
         bins[way.id] ?? []
     }
 
+    /// Geometry of the walked parts of a way, as one coordinate run per
+    /// contiguous stretch of covered bins.
+    ///
+    /// Per-bin rather than per-way on purpose. Forty-six ways run over a
+    /// kilometre and the longest is 6.6 km; colouring them all-or-nothing
+    /// would leave the longest paths looking untouched for most of the walk
+    /// along them, which is both wrong and the opposite of encouraging.
+    ///
+    /// Returns nothing for an uncovered way, so callers can skip cheaply.
+    func coveredRuns(for way: TrailGraph.Way,
+                     graph: TrailGraph) -> [[CLLocationCoordinate2D]] {
+        guard let covered = bins[way.id], !covered.isEmpty,
+              way.nodeIndices.count >= 2,
+              way.lengthMeters > Self.minimumWayMeters else { return [] }
+
+        // Contiguous bins become one run, so a fully walked way is a single
+        // polyline rather than dozens of 25 m stubs butted together.
+        let sorted = covered.sorted()
+        var ranges: [(start: Double, end: Double)] = []
+        var runStart = Int(sorted[0])
+        var runEnd = runStart
+        for bin in sorted.dropFirst() {
+            if Int(bin) == runEnd + 1 {
+                runEnd = Int(bin)
+            } else {
+                ranges.append((Double(runStart) * Self.binMeters,
+                               Double(runEnd + 1) * Self.binMeters))
+                runStart = Int(bin)
+                runEnd = runStart
+            }
+        }
+        ranges.append((Double(runStart) * Self.binMeters,
+                       Double(runEnd + 1) * Self.binMeters))
+
+        return ranges.compactMap { range in
+            let slice = Self.slice(way: way, graph: graph,
+                                   from: range.start,
+                                   to: min(range.end, way.lengthMeters))
+            return slice.count >= 2 ? slice : nil
+        }
+    }
+
+    /// The part of a way between two distances along it, interpolating at
+    /// both ends so a run starts and stops exactly where the bins do rather
+    /// than snapping to the nearest node.
+    private static func slice(way: TrailGraph.Way,
+                              graph: TrailGraph,
+                              from startMeters: Double,
+                              to endMeters: Double) -> [CLLocationCoordinate2D] {
+        guard endMeters > startMeters else { return [] }
+        var out: [CLLocationCoordinate2D] = []
+        var travelled: Double = 0
+
+        for i in 0..<(way.nodeIndices.count - 1) {
+            let aIndex = way.nodeIndices[i]
+            let bIndex = way.nodeIndices[i + 1]
+            guard graph.nodes.indices.contains(aIndex),
+                  graph.nodes.indices.contains(bIndex) else { continue }
+            let a = graph.nodes[aIndex].clCoord
+            let b = graph.nodes[bIndex].clCoord
+
+            let segmentLength = Self.distance(a, b)
+            let segmentStart = travelled
+            let segmentEnd = travelled + segmentLength
+            travelled = segmentEnd
+            guard segmentLength > 0 else { continue }
+
+            // Skip segments entirely outside the requested span.
+            if segmentEnd <= startMeters || segmentStart >= endMeters { continue }
+
+            let enterT = max(0, (startMeters - segmentStart) / segmentLength)
+            let exitT = min(1, (endMeters - segmentStart) / segmentLength)
+            if out.isEmpty {
+                out.append(Self.interpolate(a, b, enterT))
+            }
+            out.append(Self.interpolate(a, b, exitT))
+        }
+        return out
+    }
+
+    private static func interpolate(_ a: CLLocationCoordinate2D,
+                                    _ b: CLLocationCoordinate2D,
+                                    _ t: Double) -> CLLocationCoordinate2D {
+        CLLocationCoordinate2D(
+            latitude: a.latitude + (b.latitude - a.latitude) * t,
+            longitude: a.longitude + (b.longitude - a.longitude) * t
+        )
+    }
+
+    private static func distance(_ a: CLLocationCoordinate2D,
+                                 _ b: CLLocationCoordinate2D) -> Double {
+        let midLat = (a.latitude + b.latitude) / 2
+        let mPerLon = 111_319.0 * cos(midLat * .pi / 180)
+        let dx = (b.longitude - a.longitude) * mPerLon
+        let dy = (b.latitude - a.latitude) * 111_319.0
+        return (dx * dx + dy * dy).squareRoot()
+    }
+
     /// Progress for every village, plus one bucket for the natural-surface
     /// trails (which carry no village), biggest first.
     ///

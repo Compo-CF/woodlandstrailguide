@@ -106,6 +106,14 @@ struct MapTabView: View {
     /// Whether this screen started the recording, so ending navigation knows
     /// whether ending the recording is its business.
     @State private var recordingStartedByNavigation = false
+
+    /// Walked geometry, rebuilt only when coverage actually changes.
+    ///
+    /// `body` runs on every GPS fix during a walk, and slicing every covered
+    /// way out of the graph each time would make recording the most expensive
+    /// thing the app does. The store's revision counter is the cache key.
+    @State private var coverageRunsCache: [[CLLocationCoordinate2D]] = []
+    @State private var coverageRunsRevision = -1
     /// Live progress along the active route, recomputed on every location fix.
     @State private var routeProgress: RouteProgress?
     /// First-time intro sheet explaining the routing flow.
@@ -137,6 +145,8 @@ struct MapTabView: View {
                     routeNodeIndices: route?.nodes,
                     pois: poiStore.pois,
                     polygons: poiStore.polygons,
+                    coverageRuns: cachedCoverageRuns(graph: graph),
+                    coverageRevision: coverageStore.revision,
                     mapStyle: userData.mapStyle,
                     navigationActive: navigationActive,
                     recenterTick: recenterTick,
@@ -169,6 +179,14 @@ struct MapTabView: View {
                 .onChange(of: waypointNodes) { _, _ in updateRoute(graph: graph) }
                 .onChange(of: locationManager.location) { _, _ in
                     updateProgress(graph: graph)
+                }
+                .onChange(of: coverageStore.revision) { _, _ in
+                    refreshCoverageRuns(graph: graph)
+                }
+                .task(id: graph.version) {
+                    // Draw whatever was already walked on first appearance,
+                    // not only after the next fix moves the revision.
+                    refreshCoverageRuns(graph: graph)
                 }
                 .onChange(of: routeIntent) { _, _ in
                     // User tapped the Route tab in the tab bar. Enter routing
@@ -1234,6 +1252,26 @@ struct MapTabView: View {
             )
         } else {
             routePOIs = []
+        }
+    }
+
+    /// Walked geometry for the map layer, recomputed only when the store says
+    /// something changed.
+    ///
+    /// Reads the cache without mutating it — SwiftUI forbids changing state
+    /// during a body evaluation, and this is called from one. The refresh is
+    /// driven by `.onChange(of: coverageStore.revision)` instead, which costs
+    /// one extra frame before new ground appears and is the right trade: the
+    /// alternative is a runtime warning and undefined update behaviour.
+    private func cachedCoverageRuns(graph: TrailGraph) -> [[CLLocationCoordinate2D]] {
+        coverageRunsCache
+    }
+
+    private func refreshCoverageRuns(graph: TrailGraph) {
+        guard coverageRunsRevision != coverageStore.revision else { return }
+        coverageRunsRevision = coverageStore.revision
+        coverageRunsCache = graph.ways.flatMap { way in
+            coverageStore.coveredRuns(for: way, graph: graph)
         }
     }
 

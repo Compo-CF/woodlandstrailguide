@@ -9,6 +9,7 @@ struct AboutTabView: View {
     @State private var showingReport = false
     @State private var showingTipJar = false
     @State private var showingAchievements = false
+    @State private var showingCoverage = false
     @State private var isRestoring = false
     @State private var isPurchasingRemoveAds = false
     @State private var isRequestingHealthKit = false
@@ -123,35 +124,34 @@ struct AboutTabView: View {
                     )
                 }
 
-                // Provisional readout for COVERAGE_2_0.md step 3 — the real
-                // Coverage screen, with the map layer, is step 5. This exists
-                // so a test walk can be checked against the matcher without
-                // building the whole feature first. It only appears once
-                // something has actually been recorded, so it stays invisible
-                // to everyone else.
-                if coverage.overallProgress().coveredMeters > 0 {
+                // Always shown, unlike the provisional step-3 readout this
+                // replaces. A set to complete is only motivating if you can
+                // see it before you've started — "0% of The Woodlands" is an
+                // invitation, and hiding it until the first walk means nobody
+                // discovers the feature exists.
+                Section("Your Woodlands") {
                     let overall = coverage.overallProgress()
-                    Section("Your Woodlands") {
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text(String(format: "%.1f%%", overall.fraction * 100))
-                                .font(NaturalType.display(28, weight: .bold, relativeTo: .title))
-                                .foregroundStyle(Natural.ink)
-                            Text(String(format: "of %.0f mi walked", overall.totalMiles))
-                                .font(.subheadline)
-                                .foregroundStyle(Natural.inkMuted)
-                        }
-                        ForEach(coverage.progressByVillage().filter { $0.coveredMeters > 0 },
-                                id: \.name) { village in
-                            HStack {
-                                Text(village.name)
+                    Button {
+                        showingCoverage = true
+                    } label: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(CoverageSheet.percentText(overall.fraction))
+                                    .font(NaturalType.display(26, weight: .bold,
+                                                              relativeTo: .title))
                                     .foregroundStyle(Natural.ink)
+                                Text(String(format: "of %.0f miles walked",
+                                            overall.totalMiles))
+                                    .font(.subheadline)
+                                    .foregroundStyle(Natural.inkMuted)
                                 Spacer()
-                                Text(String(format: "%.2f / %.1f mi",
-                                            village.coveredMiles, village.totalMiles))
-                                    .font(.caption.monospacedDigit())
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
                                     .foregroundStyle(Natural.inkMuted)
                             }
+                            CoverageBar(fraction: overall.fraction, height: 6)
                         }
+                        .padding(.vertical, 4)
                     }
                 }
 
@@ -456,6 +456,9 @@ struct AboutTabView: View {
             }
             .sheet(isPresented: $showingAchievements) {
                 AchievementsSheet()
+            }
+            .sheet(isPresented: $showingCoverage) {
+                CoverageSheet()
             }
         }
     }
