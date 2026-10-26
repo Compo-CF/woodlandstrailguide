@@ -5,6 +5,7 @@ struct AboutTabView: View {
     @Environment(UserDataStore.self) private var userData
     @Environment(LocationManager.self) private var locationManager
     @Environment(IAPStore.self) private var iap
+    @Environment(CoverageStore.self) private var coverage
     @State private var showingReport = false
     @State private var showingTipJar = false
     @State private var showingAchievements = false
@@ -120,6 +121,38 @@ struct AboutTabView: View {
                         tagline: "Build a cosmic observatory empire in this idle discovery game.",
                         url: cosmicaURL
                     )
+                }
+
+                // Provisional readout for COVERAGE_2_0.md step 3 — the real
+                // Coverage screen, with the map layer, is step 5. This exists
+                // so a test walk can be checked against the matcher without
+                // building the whole feature first. It only appears once
+                // something has actually been recorded, so it stays invisible
+                // to everyone else.
+                if coverage.overallProgress().coveredMeters > 0 {
+                    let overall = coverage.overallProgress()
+                    Section("Your Woodlands") {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(String(format: "%.1f%%", overall.fraction * 100))
+                                .font(NaturalType.display(28, weight: .bold, relativeTo: .title))
+                                .foregroundStyle(Natural.ink)
+                            Text(String(format: "of %.0f mi walked", overall.totalMiles))
+                                .font(.subheadline)
+                                .foregroundStyle(Natural.inkMuted)
+                        }
+                        ForEach(coverage.progressByVillage().filter { $0.coveredMeters > 0 },
+                                id: \.name) { village in
+                            HStack {
+                                Text(village.name)
+                                    .foregroundStyle(Natural.ink)
+                                Spacer()
+                                Text(String(format: "%.2f / %.1f mi",
+                                            village.coveredMiles, village.totalMiles))
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(Natural.inkMuted)
+                            }
+                        }
+                    }
                 }
 
                 if !userData.tripLog.isEmpty {

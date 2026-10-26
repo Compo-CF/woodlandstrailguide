@@ -263,6 +263,29 @@ struct Router {
         return bestIdx >= 0 ? bestIdx : nil
     }
 
+    /// Which ways a route travels along.
+    ///
+    /// `Route` records the nodes it passes through, not the ways, because
+    /// nothing in navigation needed them. Coverage does: handed to
+    /// `CoverageGrid.match(preferring:)` it resolves the parallel-path cases
+    /// the ambiguity rule would otherwise refuse to record — if you are
+    /// following a route, the pathway you are on is almost certainly one of
+    /// its own.
+    ///
+    /// Computed once per route rather than per GPS fix; a long route is a
+    /// thousand nodes and this runs the adjacency lookup for each.
+    func wayIndices(along route: Route) -> Set<Int> {
+        var out: Set<Int> = []
+        for (a, b) in zip(route.nodes, route.nodes.dropFirst()) {
+            guard graph.adj.indices.contains(a) else { continue }
+            for edge in graph.adj[a] where edge.neighbor == b {
+                out.insert(edge.wayIndex)
+                break
+            }
+        }
+        return out
+    }
+
     /// Find the nearest node in the graph to an arbitrary point. Linear scan —
     /// fine at the current graph size; swap in a k-d tree if the graph grows.
     func nearestNode(to coord: CLLocationCoordinate2D) -> Int? {

@@ -17,6 +17,7 @@ struct MapTabView: View {
     @Environment(RoutingBridge.self) private var routingBridge
     @Environment(ElevationService.self) private var elevationService
     @Environment(IAPStore.self) private var iapStore
+    @Environment(CoverageStore.self) private var coverageStore
     @Environment(\.requestReview) private var requestReview
     @State private var showingWeather = false
     @State private var showingSearch = false
@@ -96,6 +97,11 @@ struct MapTabView: View {
     ///   - Idle timer is disabled so the screen stays on
     ///   - Taps on the map are suppressed (route is locked in)
     @State private var navigationActive = false
+
+    /// Ways the active route travels along, handed to CoverageStore as a
+    /// disambiguation hint. Computed when the route changes rather than per
+    /// GPS fix — a long route is a thousand nodes.
+    @State private var routeWayIndices: Set<Int> = []
     /// Live progress along the active route, recomputed on every location fix.
     @State private var routeProgress: RouteProgress?
     /// First-time intro sheet explaining the routing flow.
@@ -1177,6 +1183,7 @@ struct MapTabView: View {
             r = router.route(through: [s] + waypointNodes + [e], avoidUnpaved: userData.preferPavedRoutes)
         }
         route = r
+        routeWayIndices = r.map { router.wayIndices(along: $0) } ?? []
         if let r, let catalog = poiStore.pois {
             let coords = r.nodes.map { graph.nodes[$0].clCoord }
             routePOIs = catalog.poisAlong(
@@ -1195,6 +1202,14 @@ struct MapTabView: View {
               let loc = locationManager.location else {
             return
         }
+
+        // Step 3 of COVERAGE_2_0.md: record only while navigating. That makes
+        // coverage under-count — most walks are not navigated — but it proves
+        // the matcher against real traces without asking for background
+        // location or a new permission first. Recording mode comes after, and
+        // only if this holds up outdoors.
+        coverageStore.record(loc, routeWays: routeWayIndices)
+
         let router = Router(graph: graph)
         let progress = router.progress(along: r, at: loc)
         routeProgress = progress
@@ -1327,9 +1342,16 @@ struct MapTabView: View {
     }
 
     private func clearRoute() {
+        // The walk is over: write what was recorded, and drop the continuity
+        // hint so the next walk doesn't believe it resumes on the way this
+        // one finished on.
+        coverageStore.saveIfNeeded()
+        coverageStore.resetTrace()
+
         routingMode = false
         navigationActive = false
         addingWaypoint = false
+        routeWayIndices = []
         startNode = nil
         endNode = nil
         waypointNodes = []

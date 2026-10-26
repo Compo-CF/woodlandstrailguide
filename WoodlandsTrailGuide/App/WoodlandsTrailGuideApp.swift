@@ -14,6 +14,9 @@ struct WoodlandsTrailGuideApp: App {
     @State private var poiPhotoStore = POIPhotoStore()
     @State private var iapStore = IAPStore()
     @State private var featuredWalkStore = FeaturedWalkStore()
+    @State private var coverageStore = CoverageStore()
+
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         // Cap ad content to a rating suitable for a general-audience hiking
@@ -44,6 +47,22 @@ struct WoodlandsTrailGuideApp: App {
                 .environment(poiPhotoStore)
                 .environment(iapStore)
                 .environment(featuredWalkStore)
+                .environment(coverageStore)
+                .onChange(of: store.graph == nil) { _, _ in
+                    // Build the spatial index as soon as the graph lands.
+                    // Deliberately not in CoverageStore.init: that runs before
+                    // any data exists, and indexing 45,882 segments on the
+                    // launch path is exactly what the splash is covering.
+                    if let graph = store.graph {
+                        coverageStore.attach(graph: graph)
+                    }
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    // Coverage is written on background rather than per fix —
+                    // a walk produces hundreds of them, and the store no-ops
+                    // when nothing changed.
+                    if phase != .active { coverageStore.saveIfNeeded() }
+                }
                 .onOpenURL { url in
                     // woodlandstrailguide://route?start=…&end=…&via=…
                     if let pending = RoutingBridge.parse(url) {
