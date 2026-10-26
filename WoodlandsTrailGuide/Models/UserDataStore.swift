@@ -31,6 +31,7 @@ final class UserDataStore {
 
     private let defaults = UserDefaults.standard
     private let favoritesKey = "favorites.v1"
+    private let favoritesMigratedKey = "favoritesMigratedToStableIDs.v1"
     private let onboardingKey = "hasSeenOnboarding.v1"
     private let appLaunchesKey = "appLaunches.v1"
     private let mapStyleKey = "mapStyle.v1"
@@ -46,6 +47,7 @@ final class UserDataStore {
            let arr = try? JSONDecoder().decode([String].self, from: data) {
             favoriteWayIDs = Set(arr)
         }
+        pruneStaleFavorites()
         appLaunches = defaults.integer(forKey: appLaunchesKey)
         if let raw = defaults.string(forKey: mapStyleKey),
            let parsed = MapStyleChoice(rawValue: raw) {
@@ -83,6 +85,32 @@ final class UserDataStore {
     func recordAppLaunch() {
         appLaunches += 1
         defaults.set(appLaunches, forKey: appLaunchesKey)
+    }
+
+    /// Drop favourites saved under the old, index-derived way ids.
+    ///
+    /// Before `TrailGraph.stableID(for:nodes:)`, a way with no Township
+    /// `pathway_id` was keyed `"n:" + nodeIndices.prefix(4)`. Node indices are
+    /// positions in a regenerated graph, so every data refresh reshuffled them
+    /// and those favourites stopped matching any way — they were already lost,
+    /// just invisibly, as rows that would never light up a heart again.
+    ///
+    /// There is nothing to recover: the indices no longer refer to anything
+    /// knowable. Deleting them is only making the existing loss honest, and it
+    /// stops `favoriteWayIDs.count` inflating the Collector achievement with
+    /// entries no screen can show. Paved pathways are unaffected — their
+    /// `"p:PTHWY-…"` ids were always stable and carry straight over.
+    private func pruneStaleFavorites() {
+        guard !defaults.bool(forKey: favoritesMigratedKey) else { return }
+        defaults.set(true, forKey: favoritesMigratedKey)
+
+        let stale = favoriteWayIDs.filter { $0.hasPrefix("n:") }
+        guard !stale.isEmpty else { return }
+
+        favoriteWayIDs.subtract(stale)
+        if let data = try? JSONEncoder().encode(Array(favoriteWayIDs)) {
+            defaults.set(data, forKey: favoritesKey)
+        }
     }
 
     func isFavorite(_ id: String) -> Bool { favoriteWayIDs.contains(id) }

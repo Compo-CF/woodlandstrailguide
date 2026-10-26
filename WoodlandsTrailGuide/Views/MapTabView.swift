@@ -1459,9 +1459,7 @@ private struct POISelection: Identifiable {
     var id: String { "\(category.key):\(poi.id)" }
 }
 
-extension TrailGraph.Way: Identifiable {
-    var id: String {
-        if let p = pathwayID { return "p:" + p }
-        return "n:" + nodeIndices.prefix(4).map(String.init).joined(separator: "-")
-    }
-}
+// `TrailGraph.Way` conforms to Identifiable in TrailGraph.swift, where the id
+// can be built from node coordinates rather than node indices. The version
+// that used to live here keyed id-less ways on `nodeIndices.prefix(4)`, which
+// does not survive a Township data refresh.
