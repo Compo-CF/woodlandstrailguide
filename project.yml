@@ -39,7 +39,7 @@ targets:
       path: WoodlandsTrailGuide/Info.plist
       properties:
         CFBundleDisplayName: WTG
-        CFBundleShortVersionString: "1.8"
+        CFBundleShortVersionString: "2.0"
         # Driven by scripts/testflight.sh via CURRENT_PROJECT_VERSION (git
         # commit count). A literal here silently wins over the command-line
         # override and ships the wrong build number.
