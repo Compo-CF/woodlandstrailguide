@@ -89,6 +89,23 @@ def haversine_m(la1, lo1, la2, lo2):
     return 2 * R * math.asin(math.sqrt(a))
 
 
+# Typos in the Township's own STREET values. Correcting them here rather than
+# in either app means one fix reaches iOS and Android over the air, with no
+# release and no review -- both pull TrailGraph.json from GitHub Pages.
+#
+# Keyed on the title-cased result, so entries read the way they appear in the
+# app. Keep this list short, and only for genuine misspellings: renaming things
+# the Township spells deliberately would put our map at odds with their signs,
+# which is worse than a typo.
+#
+# "Alden Brideg Dr" (PTHWY-398) and "W Alden Brideg Dr" (PTHWY-395) were found
+# by QA against Android 1.0.0+6, reported as M-01, and are wrong on iOS too.
+STREET_NAME_FIXES = {
+    "Alden Brideg Dr": "Alden Bridge Dr",
+    "W Alden Brideg Dr": "W Alden Bridge Dr",
+}
+
+
 def title_case_street(s: str | None) -> str | None:
     """ArcGIS gives us SHOUTING street names. Title-case them but keep small words."""
     if not s:
@@ -101,7 +118,8 @@ def title_case_street(s: str | None) -> str | None:
             out.append(w)
         else:
             out.append(w[:1].upper() + w[1:])
-    return " ".join(out)
+    cased = " ".join(out)
+    return STREET_NAME_FIXES.get(cased, cased)
 
 
 # Township villages are stored UPPERCASED in the GIS and missing the apostrophes
