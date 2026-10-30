@@ -48,8 +48,29 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "scripts" / "raw"
 RES = ROOT / "WoodlandsTrailGuide" / "Resources"
+
+# Served by GitHub Pages; both apps refresh from here after bundling the
+# Resources/ copy. This script is the one that got it wrong: the 2026-10-02
+# refresh wrote POIs.json and Polygons.json to Resources/ and never copied
+# them here, so for four weeks every install downloaded June data over its
+# own October data on launch. Nothing surfaced it -- a fetch of
+# older-but-valid data looks exactly like a fetch of newer data.
+DOCS = ROOT / "docs"
+
 RAW.mkdir(parents=True, exist_ok=True)
 RES.mkdir(parents=True, exist_ok=True)
+DOCS.mkdir(parents=True, exist_ok=True)
+
+
+def publish(filename: str, text: str) -> None:
+    """Write a data file to Resources/ and to docs/ in one step.
+
+    Identical bytes to both. Any difference between the bundled seed and the
+    copy Pages serves stays invisible until a user reports a map that
+    disagrees with itself.
+    """
+    (RES / filename).write_text(text, encoding="utf-8")
+    (DOCS / filename).write_text(text, encoding="utf-8")
 
 BASE = "https://tharcgis2.thewoodlands-tx.gov/arcgis/rest/services"
 
@@ -479,15 +500,9 @@ def main():
             print(f"  FAILED: {e}")
             failures.append((layer, str(e)))
 
-    # Compact JSON for the bundle.
-    (RES / "POIs.json").write_text(
-        json.dumps(pois_out, separators=(",", ":")),
-        encoding="utf-8",
-    )
-    (RES / "Polygons.json").write_text(
-        json.dumps(polys_out, separators=(",", ":")),
-        encoding="utf-8",
-    )
+    # Compact JSON for the bundle, written to Resources/ and docs/ together.
+    publish("POIs.json", json.dumps(pois_out, separators=(",", ":")))
+    publish("Polygons.json", json.dumps(polys_out, separators=(",", ":")))
 
     print()
     print(f"POIs.json:     {(RES / 'POIs.json').stat().st_size/1024:.0f} KB, {poi_count} points across {len(pois_out['categories'])} categories")

@@ -27,6 +27,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT / "scripts" / "raw"
 RES_DIR = ROOT / "WoodlandsTrailGuide" / "Resources"
+
+# Both apps bundle a seed copy from Resources/ and then refresh from
+# docs/, which GitHub Pages serves. Writing only Resources/ leaves the
+# served copy behind, and nothing reports it: a successful fetch of
+# older-but-valid data is indistinguishable from a successful fetch of
+# newer data, and the files carry no version the apps compare against.
+#
+# That is not hypothetical. The 2026-10-02 refresh updated Resources/ and
+# forgot docs/POIs.json and docs/Polygons.json, so for four weeks every
+# install downloaded June data over its own October data on launch and
+# quietly downgraded its map, on iOS and Android alike. Publishing is now
+# part of generating, so it cannot be forgotten separately.
+DOCS_DIR = ROOT / "docs"
 RAW_DIR.mkdir(parents=True, exist_ok=True)
 RES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -104,6 +117,24 @@ STREET_NAME_FIXES = {
     "Alden Brideg Dr": "Alden Bridge Dr",
     "W Alden Brideg Dr": "W Alden Bridge Dr",
 }
+
+
+def publish(filename: str, text: str):
+    """Write a data file to Resources/ and to docs/ in one step.
+
+    Identical bytes to both, deliberately: any difference between the bundled
+    seed and the copy Pages serves is a difference nobody can see until a user
+    reports a map that disagrees with itself.
+
+    Returns the Resources/ path, for logging.
+    """
+    res_path = RES_DIR / filename
+    docs_path = DOCS_DIR / filename
+    res_path.write_text(text, encoding="utf-8")
+    DOCS_DIR.mkdir(parents=True, exist_ok=True)
+    docs_path.write_text(text, encoding="utf-8")
+    print(f"  wrote {res_path.name} to Resources/ and docs/")
+    return res_path
 
 
 def title_case_street(s: str | None) -> str | None:
@@ -279,8 +310,7 @@ def main():
 
     print("Building graph ...")
     graph = build_graph(layers)
-    out = RES_DIR / "TrailGraph.json"
-    out.write_text(json.dumps(graph, separators=(",", ":")), encoding="utf-8")
+    out = publish("TrailGraph.json", json.dumps(graph, separators=(",", ":")))
     miles = graph["total_length_m"] / 1609.344
     named = sum(1 for w in graph["ways"] if "name" in w)
     print()
