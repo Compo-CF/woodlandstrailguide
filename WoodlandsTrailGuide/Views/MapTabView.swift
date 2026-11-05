@@ -118,6 +118,10 @@ struct MapTabView: View {
     /// A milestone waiting to be acknowledged, surfaced after a walk ends.
     @State private var coverageMilestone: CoverageMilestone?
     @State private var showingCoverage = false
+    /// True when the coverage sheet was opened by tapping a milestone, so the
+    /// review ask can wait until they've closed it. Asking any earlier puts a
+    /// system dialog on top of the map they just tapped to go and look at.
+    @State private var reviewAfterCoverage = false
     /// Live progress along the active route, recomputed on every location fix.
     @State private var routeProgress: RouteProgress?
     /// First-time intro sheet explaining the routing flow.
@@ -383,6 +387,7 @@ struct MapTabView: View {
                         Button {
                             coverageStore.markCelebrated(milestone)
                             coverageMilestone = nil
+                            reviewAfterCoverage = true
                             showingCoverage = true
                         } label: {
                             HStack(spacing: 10) {
@@ -476,7 +481,7 @@ struct MapTabView: View {
                     .presentationDetents([.height(220)])
             }
         }
-        .sheet(isPresented: $showingCoverage) {
+        .sheet(isPresented: $showingCoverage, onDismiss: considerMilestoneReview) {
             CoverageSheet()
         }
         .sheet(isPresented: $showingSearch) {
@@ -1467,6 +1472,31 @@ struct MapTabView: View {
         startNode = s
         endNode = e
         waypointNodes = request.waypoints.compactMap { router.nearestNode(to: $0) }
+    }
+
+    /// Ask for a review once somebody has acknowledged a coverage milestone
+    /// and finished looking at the map it belongs to.
+    ///
+    /// This is the best moment the app has. They crossed a threshold they've
+    /// been walking toward for weeks, tapped to see it, and closed the sheet
+    /// satisfied. The other trigger — arriving at a routed destination — only
+    /// ever fires for people who asked for directions, and as the record
+    /// button's own note says, most walking here isn't navigated.
+    ///
+    /// Reaching a milestone is itself proof of engagement, so there's no
+    /// hasMeaningfulEngagement check: eligibleForReviewRequest's 30-day
+    /// cooldown is the only gate that still earns its place. The one-second
+    /// delay lets the sheet's dismiss animation finish, so the dialog arrives
+    /// on a settled screen rather than racing the transition.
+    private func considerMilestoneReview() {
+        guard reviewAfterCoverage else { return }
+        reviewAfterCoverage = false
+        guard userData.eligibleForReviewRequest else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            requestReview()
+            userData.markReviewRequested()
+        }
     }
 
     private func clearRoute() {
