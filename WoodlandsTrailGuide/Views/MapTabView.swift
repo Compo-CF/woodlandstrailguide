@@ -130,9 +130,10 @@ struct MapTabView: View {
     /// map back to the user's location whenever it changes.
     @State private var recenterTick: Int = 0
 
-    /// Google AdMob banner ad unit ID for the map bottom banner.
+    /// Google AdMob banner ad unit for the map bottom banner. Resolves to
+    /// Google's test unit on DEBUG and TestFlight builds — see `AdUnits`.
     /// App-level GADApplicationIdentifier lives in project.yml.
-    private let bannerAdUnitID = "ca-app-pub-1927040492403163/1489998026"
+    private let bannerAdUnitID = AdUnits.banner
 
     private let alongRouteSkip: Set<String> = [
         "benches", "picnic_tables", "bike_racks", "dog_bag",
