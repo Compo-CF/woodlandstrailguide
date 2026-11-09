@@ -177,10 +177,11 @@ struct MapTabView: View {
                 .ignoresSafeArea(edges: .top)
                 .safeAreaInset(edge: .bottom) {
                     if !iapStore.hasRemovedAds {
-                        BannerAdView(adUnitID: bannerAdUnitID)
-                            .frame(height: 50)
-                            .frame(maxWidth: .infinity)
-                            .background(Natural.cardBg)
+                        // Height comes from the loaded ad, not a constant:
+                        // anchored adaptive picks its own, and an unfilled
+                        // request must collapse the inset rather than leave
+                        // a blank band. See MapBannerAd.
+                        MapBannerAd(adUnitID: bannerAdUnitID)
                     }
                 }
                 .onChange(of: startNode) { _, _ in updateRoute(graph: graph) }
