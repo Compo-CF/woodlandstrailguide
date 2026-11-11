@@ -14,9 +14,9 @@ struct AboutTabView: View {
     @State private var isPurchasingRemoveAds = false
     @State private var isRequestingHealthKit = false
 
-    private let fishingGuideURL = URL(string: "https://apps.apple.com/app/the-woodlands-fishing-guide/id6773332173")!
-    private let stierEatsURL = URL(string: "https://apps.apple.com/app/id6773501518")!
-    private let cosmicaURL = URL(string: "https://apps.apple.com/app/id6784340038")!
+    /// Studio page listing every After Hours Dev Studio app. Replaces the
+    /// old per-app cross-promo rows, so new apps show up without a release.
+    private let studioURL = URL(string: "https://compo-cf.github.io/afterhoursdevstudio/")!
     private let supportURL = URL(string: "https://compo-cf.github.io/woodlandstrailguide/support.html")!
     /// Deep link straight into the App Store's write-a-review sheet for this
     /// app. The system requestReview() prompt is rate-limited by Apple (3/yr,
@@ -65,7 +65,7 @@ struct AboutTabView: View {
         return comps.url ?? URL(string: "mailto:anthony.compofelice@centricfiber.com")!
     }
 
-    /// One row in the "Also from this developer" cross-promo section.
+    /// Row in the "Also from this developer" section (links to the studio page).
     private func developerAppRow(icon: String, tint: Color, name: String, tagline: String, url: URL) -> some View {
         Link(destination: url) {
             HStack(spacing: 12) {
@@ -102,25 +102,11 @@ struct AboutTabView: View {
 
                 Section("Also from this developer") {
                     developerAppRow(
-                        icon: "fish.fill",
-                        tint: Color(red: 0.04, green: 0.42, blue: 0.45),
-                        name: "The Woodlands Fishing Guide",
-                        tagline: "The same trail-guide treatment for 80+ fishing spots across Montgomery County.",
-                        url: fishingGuideURL
-                    )
-                    developerAppRow(
-                        icon: "fork.knife",
-                        tint: Color(red: 0.72, green: 0.16, blue: 0.14),
-                        name: "S-Tier Eats",
-                        tagline: "Rank restaurants across The Woodlands & Spring — S/A/B/C/F, no five-star blob.",
-                        url: stierEatsURL
-                    )
-                    developerAppRow(
-                        icon: "sparkles",
+                        icon: "moon.stars.fill",
                         tint: Color(red: 0.24, green: 0.12, blue: 0.46),
-                        name: "Cosmica: Idle Universe",
-                        tagline: "Build a cosmic observatory empire in this idle discovery game.",
-                        url: cosmicaURL
+                        name: "More from After Hours Dev Studio",
+                        tagline: "S-Tier Eats, the Fishing Guide, Cosmica and more.",
+                        url: studioURL
                     )
                 }
 
@@ -442,7 +428,7 @@ struct AboutTabView: View {
                 }
 
                 Section {
-                    Text("Trail data © The Woodlands Township.\nApp by Anthony Compofelice.")
+                    Text("Trail data © The Woodlands Township.\nMade by After Hours Dev Studio.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
