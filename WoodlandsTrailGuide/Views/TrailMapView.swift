@@ -72,6 +72,12 @@ struct TrailMapView: UIViewRepresentable {
         mapView.showsUserLocation = true
         mapView.showsCompass = true
         mapView.showsScale = true
+        // Extruded 3D buildings. Only ever visible on a *pitched* camera
+        // (see Coordinator.applyNavigationCamera) and, in this township,
+        // only around Town Center and the Waterway — the one stretch with
+        // real verticality. MapKit defaults this to true; set explicitly so
+        // it reads as a decision rather than an accident of the default.
+        mapView.showsBuildings = true
         // Hide MapKit's own POIs — we render our own from Township data.
         mapView.pointOfInterestFilter = .excludingAll
         applyConfiguration(mapView, style: mapStyle)
@@ -102,9 +108,7 @@ struct TrailMapView: UIViewRepresentable {
         if coord.appliedNavigationActive != navigationActive {
             let mode: MKUserTrackingMode = navigationActive ? .followWithHeading : .none
             mapView.setUserTrackingMode(mode, animated: true)
-            if navigationActive {
-                mapView.camera.altitude = 600
-            }
+            coord.applyNavigationCamera(to: mapView, active: navigationActive)
             coord.appliedNavigationActive = navigationActive
         }
 
@@ -115,6 +119,8 @@ struct TrailMapView: UIViewRepresentable {
                 mapView.setUserTrackingMode(.follow, animated: true)
             } else {
                 mapView.setUserTrackingMode(.followWithHeading, animated: true)
+                // Recentering mid-walk must not flatten the map back out.
+                coord.applyNavigationCamera(to: mapView, active: true)
             }
             coord.appliedRecenterTick = recenterTick
         }
@@ -316,6 +322,42 @@ struct TrailMapView: UIViewRepresentable {
         var appliedSearchTick: Int = 0
 
         init(_ parent: TrailMapView) { self.parent = parent }
+
+        // MARK: - Navigation camera
+
+        /// Camera used while walking a route.
+        ///
+        /// 600m matches what this used to set as a bare `altitude`; 55 deg is
+        /// the angle Maps uses for turn-by-turn and survives MapKit's
+        /// pitch clamp at this distance (the clamp tightens as you zoom out,
+        /// so a steeper value would silently be ignored from altitude).
+        static let navigationDistance: CLLocationDistance = 600
+        static let navigationPitch: CGFloat = 55
+
+        /// Tilts the camera into the walking view, or flattens it back.
+        ///
+        /// Pitching is the whole reason the other two 3D settings do
+        /// anything: `elevationStyle: .realistic` and `showsBuildings` are
+        /// both already on, but looking straight down renders terrain and
+        /// buildings identically to a flat map, so neither was ever visible.
+        ///
+        /// Terrain contributes close to nothing here regardless — The
+        /// Woodlands has roughly 63ft of relief across the entire township
+        /// (sampled 2026-11-11: 43.2m-62.3m). The buildings at Town Center
+        /// and along the Waterway are the actual payoff.
+        func applyNavigationCamera(to mapView: MKMapView, active: Bool) {
+            let current = mapView.camera
+            let camera = MKMapCamera(
+                lookingAtCenter: current.centerCoordinate,
+                // Deactivating keeps wherever the user had zoomed to and
+                // only drops the pitch; activating snaps to walking range.
+                fromDistance: active ? Self.navigationDistance
+                                     : current.centerCoordinateDistance,
+                pitch: active ? Self.navigationPitch : 0,
+                heading: current.heading
+            )
+            mapView.setCamera(camera, animated: true)
+        }
 
         // MARK: - Renderers
 
