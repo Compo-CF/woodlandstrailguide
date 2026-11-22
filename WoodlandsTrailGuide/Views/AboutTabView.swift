@@ -17,7 +17,7 @@ struct AboutTabView: View {
     private let fishingGuideURL = URL(string: "https://apps.apple.com/app/the-woodlands-fishing-guide/id6773332173")!
     private let stierEatsURL = URL(string: "https://apps.apple.com/app/id6773501518")!
     private let cosmicaURL = URL(string: "https://apps.apple.com/app/id6784340038")!
-    private let supportURL = URL(string: "https://compo-cf.github.io/woodlandstrailguide/support.html")!
+    private let supportURL = URL(string: "https://afterhoursdevstudio.com/woodlands-trail-guide/")!
     /// Deep link straight into the App Store's write-a-review sheet for this
     /// app. The system requestReview() prompt is rate-limited by Apple (3/yr,
     /// and it alone decides whether to actually show) — this row is the only
@@ -442,7 +442,7 @@ struct AboutTabView: View {
                 }
 
                 Section {
-                    Text("Trail data © The Woodlands Township.\nApp by Anthony Compofelice.")
+                    Text("Trail data © The Woodlands Township.\nApp by After Hours Dev Studio.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
