@@ -12,7 +12,7 @@ struct FeaturedTabView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if walkStore.walks.isEmpty && eventStore.featuredEvent == nil {
+                if walkStore.walks.isEmpty && eventStore.featuredEvents.isEmpty {
                     emptyState
                 } else {
                     walksList
@@ -24,7 +24,7 @@ struct FeaturedTabView: View {
             }
         }
         // Opened by the event card below or by the App Store In-App Event's
-        // deep link (woodlandstrailguide://event/newyear2027).
+        // deep link (woodlandstrailguide://event/<id>).
         .sheet(isPresented: Binding(
             get: { eventStore.showRequested },
             set: { eventStore.showRequested = $0 }
@@ -37,9 +37,9 @@ struct FeaturedTabView: View {
 
     private var walksList: some View {
         List {
-            if let event = eventStore.featuredEvent {
+            ForEach(eventStore.featuredEvents) { event in
                 Button {
-                    eventStore.showRequested = true
+                    eventStore.show(event)
                 } label: {
                     EventBannerCard(event: event)
                 }

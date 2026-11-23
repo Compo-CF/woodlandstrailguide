@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Card at the top of the Featured tab while a seasonal event is upcoming or
-/// live (WalkEventStore.featuredEvent).
+/// live (WalkEventStore.featuredEvents).
 struct EventBannerCard: View {
     let event: WalkEvent
 

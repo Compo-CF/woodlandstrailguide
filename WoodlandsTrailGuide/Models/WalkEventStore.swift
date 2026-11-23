@@ -56,50 +56,67 @@ struct WalkEvent: Codable, Identifiable, Hashable {
     }
 }
 
+/// `Events.json`: every seasonal event, past and upcoming. (2.1.0 read a
+/// single event from `EventWalks.json`; that file stays on Pages unchanged
+/// for 2.1.0 installs.)
+private struct EventFeed: Codable { let events: [WalkEvent] }
+
 /// Same bundled-seed + GitHub Pages refresh pattern as FeaturedWalkStore.
 @Observable
 final class WalkEventStore {
-    static let remoteURL = URL(string: "https://compo-cf.github.io/woodlandstrailguide/EventWalks.json")!
-    static let cacheFilename = "EventWalks.cache.json"
+    static let remoteURL = URL(string: "https://compo-cf.github.io/woodlandstrailguide/Events.json")!
+    static let cacheFilename = "Events.cache.json"
 
-    var event: WalkEvent?
-    /// Set by the `woodlandstrailguide://event/...` deep link (the App Store
-    /// In-App Event card links here). ContentView switches to the Featured
-    /// tab and FeaturedTabView presents the event sheet.
+    var events: [WalkEvent] = []
+    /// Set by the `woodlandstrailguide://event/<id>` deep link (App Store
+    /// In-App Event cards) or by tapping an event card. ContentView switches
+    /// to the Featured tab and FeaturedTabView presents the event sheet.
     var showRequested = false
+    /// Which event the sheet shows; nil = the current featured one.
+    var requestedEventID: String?
 
     init() {
         if !loadFromDiskCache() { loadBundled() }
         Task { await refresh() }
     }
 
-    /// Event to promote in the Featured tab right now, if any.
-    var featuredEvent: WalkEvent? {
-        guard let event else { return nil }
-        switch event.phase() {
-        case .upcoming, .live: return event
-        case .hidden, .ended: return nil
-        }
+    /// Events to promote in the Featured tab right now: live ones first, then
+    /// upcoming ones (their App Store event page is already up).
+    var featuredEvents: [WalkEvent] {
+        let live = events.filter { $0.phase() == .live }
+        let upcoming = events.filter { $0.phase() == .upcoming }
+        return (live + upcoming)
+    }
+
+    /// The event the sheet presents.
+    var event: WalkEvent? {
+        if let id = requestedEventID, let e = events.first(where: { $0.id == id }) { return e }
+        return featuredEvents.first ?? events.last
+    }
+
+    func show(_ event: WalkEvent) {
+        requestedEventID = event.id
+        showRequested = true
     }
 
     @discardableResult
     private func loadFromDiskCache() -> Bool {
         guard let url = cacheFileURL,
               let data = try? Data(contentsOf: url),
-              let decoded = try? JSONDecoder().decode(WalkEvent.self, from: data) else {
+              let decoded = try? JSONDecoder().decode(EventFeed.self, from: data) else {
             return false
         }
-        event = decoded
+        events = decoded.events
         return true
     }
 
     private func loadBundled() {
-        guard let url = Bundle.main.url(forResource: "EventWalks", withExtension: "json"),
+        guard let url = Bundle.main.url(forResource: "Events", withExtension: "json"),
               let data = try? Data(contentsOf: url),
-              let decoded = try? JSONDecoder().decode(WalkEvent.self, from: data) else {
+              let decoded = try? JSONDecoder().decode(EventFeed.self, from: data) else {
             return
         }
-        event = decoded
+        events = decoded.events
     }
 
     func refresh() async {
@@ -107,9 +124,9 @@ final class WalkEventStore {
             var req = URLRequest(url: Self.remoteURL)
             req.cachePolicy = .reloadIgnoringLocalCacheData
             let (data, _) = try await URLSession.shared.data(for: req)
-            let decoded = try JSONDecoder().decode(WalkEvent.self, from: data)
+            let decoded = try JSONDecoder().decode(EventFeed.self, from: data)
             await MainActor.run {
-                event = decoded
+                events = decoded.events
                 if let url = cacheFileURL { try? data.write(to: url, options: .atomic) }
             }
         } catch {
@@ -123,6 +140,8 @@ final class WalkEventStore {
     func handle(_ url: URL) -> Bool {
         guard url.scheme?.lowercased() == "woodlandstrailguide",
               url.host?.lowercased() == "event" else { return false }
+        let id = url.pathComponents.first(where: { $0 != "/" })
+        requestedEventID = id
         showRequested = true
         return true
     }
