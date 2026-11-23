@@ -8,6 +8,9 @@ import CoreLocation
 /// routed map.
 struct FeaturedWalkDetailSheet: View {
     let walk: FeaturedWalk
+    /// Extra work after the route is handed off (the event sheet uses it to
+    /// close itself as well).
+    var onStart: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(RoutingBridge.self) private var routingBridge
 
@@ -154,6 +157,7 @@ struct FeaturedWalkDetailSheet: View {
             end: stops.last!,
             waypoints: Array(stops.dropFirst().dropLast())
         )
+        onStart?()
         dismiss()
     }
 

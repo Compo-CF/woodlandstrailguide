@@ -14,6 +14,7 @@ struct WoodlandsTrailGuideApp: App {
     @State private var poiPhotoStore = POIPhotoStore()
     @State private var iapStore = IAPStore()
     @State private var featuredWalkStore = FeaturedWalkStore()
+    @State private var walkEventStore = WalkEventStore()
     @State private var coverageStore = CoverageStore()
 
     @Environment(\.scenePhase) private var scenePhase
@@ -47,6 +48,7 @@ struct WoodlandsTrailGuideApp: App {
                 .environment(poiPhotoStore)
                 .environment(iapStore)
                 .environment(featuredWalkStore)
+                .environment(walkEventStore)
                 .environment(coverageStore)
                 .onChange(of: store.graph == nil) { _, _ in
                     // Build the spatial index as soon as the graph lands.
@@ -64,6 +66,8 @@ struct WoodlandsTrailGuideApp: App {
                     if phase != .active { coverageStore.saveIfNeeded() }
                 }
                 .onOpenURL { url in
+                    // woodlandstrailguide://event/<id> — App Store In-App Event card.
+                    if walkEventStore.handle(url) { return }
                     // woodlandstrailguide://route?start=…&end=…&via=…
                     if let pending = RoutingBridge.parse(url) {
                         routingBridge.pending = pending

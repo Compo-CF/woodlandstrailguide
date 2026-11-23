@@ -1,0 +1,110 @@
+{
+  "id": "newyear2027",
+  "title": "New Year Walks 2027",
+  "tagline": "Four fresh-start routes for January, from a first mile to a long one.",
+  "previewFrom": "2026-12-18",
+  "startsOn": "2027-01-01",
+  "endsOn": "2027-01-31",
+  "walks": [
+    {
+      "id": "ny27-northshore-resolution-mile",
+      "name": "Resolution Mile: Northshore Park",
+      "description": "Start the year small. About one mile on the pathway along Lake Woodlands Drive, out and back in each direction from the Northshore Park lot, so you are never more than a few minutes from your car. A good first walk on New Year's morning.",
+      "village": "Panther Creek",
+      "park": "Northshore Park",
+      "difficulty": "easy",
+      "distanceMiles": 1.0,
+      "elevationGainFeet": null,
+      "waypoints": [
+        {"lat": 30.169207, "lon": -95.476287, "note": "Start at the Northshore Park lot"},
+        {"lat": 30.168358, "lon": -95.472427, "note": "East turnaround"},
+        {"lat": 30.169036, "lon": -95.479692, "note": "West turnaround"},
+        {"lat": 30.169207, "lon": -95.476287, "note": "Back at Northshore Park"}
+      ],
+      "highlights": [
+        "Starts and ends at Northshore Park on Lake Woodlands",
+        "Passes the park's docks and boat house",
+        "Crosses the Panther Creek pathway bridge",
+        "Flat, paved, and about 20 minutes at an easy pace"
+      ],
+      "bestTime": "New Year's morning, or any day you want an easy win",
+      "seasonality": "Featured January 1 to 31, 2027",
+      "curatedBy": "Anthony Compofelice"
+    },
+    {
+      "id": "ny27-bear-branch-loop",
+      "name": "New Year Loop: Bear Branch Park",
+      "description": "A 2.9-mile loop that leaves Bear Branch Park, follows the Gosling Road and Research Forest Drive pathways, and comes back through Alden Bridge without retracing a single step.",
+      "village": "Cochran's Crossing",
+      "park": "Bear Branch Park",
+      "difficulty": "easy",
+      "distanceMiles": 2.9,
+      "elevationGainFeet": null,
+      "waypoints": [
+        {"lat": 30.193151, "lon": -95.490311, "note": "Start at Bear Branch Park"},
+        {"lat": 30.197543, "lon": -95.480381, "note": null},
+        {"lat": 30.185461, "lon": -95.487307, "note": null},
+        {"lat": 30.193151, "lon": -95.490311, "note": "Back at Bear Branch Park"}
+      ],
+      "highlights": [
+        "A true loop: no out-and-back stretches",
+        "Restrooms, water fountain, pavilion and playground at Bear Branch Park",
+        "Two pathway bridges, in Cochran's Crossing and Research Forest",
+        "Touches three villages: Cochran's Crossing, Alden Bridge and Research Forest"
+      ],
+      "bestTime": "Weekend mornings",
+      "seasonality": "Featured January 1 to 31, 2027",
+      "curatedBy": "Anthony Compofelice"
+    },
+    {
+      "id": "ny27-lake-paloma-5k",
+      "name": "First 5K of 2027: Lake Paloma",
+      "description": "A 3.1-mile loop through Creekside Park: out along Lake Paloma Trail, past Rob Fleming Park and the aquatic center, and home on Creekside Green Drive. Walk it, jog it, or run your first 5K of the year.",
+      "village": "Creekside Park",
+      "park": "Lake Paloma Park",
+      "difficulty": "easy",
+      "distanceMiles": 3.1,
+      "elevationGainFeet": null,
+      "waypoints": [
+        {"lat": 30.144976, "lon": -95.527713, "note": "Start at Lake Paloma Park"},
+        {"lat": 30.148025, "lon": -95.520075, "note": null},
+        {"lat": 30.13831, "lon": -95.531482, "note": null},
+        {"lat": 30.144976, "lon": -95.527713, "note": "Back at Lake Paloma Park"}
+      ],
+      "highlights": [
+        "5K distance, almost no doubling back",
+        "Passes Rob Fleming Park, its aquatic center and a water fountain",
+        "Goes by the Creekside Dog Park",
+        "Crosses the Creekside Park pathway bridge"
+      ],
+      "bestTime": "Early morning or late afternoon",
+      "seasonality": "Featured January 1 to 31, 2027",
+      "curatedBy": "Anthony Compofelice"
+    },
+    {
+      "id": "ny27-three-village-long-walk",
+      "name": "The Long Resolution: Three Villages",
+      "description": "For the big goal: a 7.6-mile loop from Lakeside Park on the Sterling Ridge Drive, Cochrans Crossing Drive and West Alden Bridge Drive pathways. Long, steady and almost entirely loop, with parks to stop at along the way.",
+      "village": "Alden Bridge",
+      "park": "Lakeside Park",
+      "difficulty": "moderate",
+      "distanceMiles": 7.6,
+      "elevationGainFeet": null,
+      "waypoints": [
+        {"lat": 30.20347, "lon": -95.542364, "note": "Start at Lakeside Park"},
+        {"lat": 30.18517, "lon": -95.54423, "note": null},
+        {"lat": 30.189131, "lon": -95.524628, "note": null},
+        {"lat": 30.20347, "lon": -95.542364, "note": "Back at Lakeside Park"}
+      ],
+      "highlights": [
+        "Covers Sterling Ridge, Cochran's Crossing and Alden Bridge",
+        "Restrooms and a water fountain at Lakeside Park",
+        "Pavilion and playground at Cattail Park on the way",
+        "Two pathway bridges, in Alden Bridge and Cochran's Crossing"
+      ],
+      "bestTime": "Cool January mornings; bring water",
+      "seasonality": "Featured January 1 to 31, 2027",
+      "curatedBy": "Anthony Compofelice"
+    }
+  ]
+}

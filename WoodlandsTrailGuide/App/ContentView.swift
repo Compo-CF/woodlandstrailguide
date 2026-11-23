@@ -14,6 +14,7 @@ import StoreKit
 struct ContentView: View {
     @Environment(UserDataStore.self) private var userData
     @Environment(RoutingBridge.self) private var routingBridge
+    @Environment(WalkEventStore.self) private var walkEventStore
     @Environment(\.requestReview) private var requestReview
     @State private var showingOnboarding = false
     @State private var showingKofiPrompt = false
@@ -53,6 +54,15 @@ struct ContentView: View {
             guard new == .route else { return }
             selectedTab = .map
             routeIntent &+= 1
+        }
+        .onChange(of: walkEventStore.showRequested) { _, show in
+            // Event deep link: FeaturedTabView owns the event sheet.
+            if show { selectedTab = .featured }
+        }
+        .onAppear {
+            // Cold launch from the event link: the URL can land while the
+            // splash is still up, before the onChange above exists.
+            if walkEventStore.showRequested { selectedTab = .featured }
         }
         .onChange(of: routingBridge.pending) { _, newValue in
             // A pending route was set — from a deep link, or from the

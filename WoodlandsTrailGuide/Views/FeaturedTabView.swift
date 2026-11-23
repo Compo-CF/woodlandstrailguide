@@ -5,13 +5,14 @@ import SwiftUI
 /// tap (which hands off to MapTabView via RoutingBridge.pending).
 struct FeaturedTabView: View {
     @Environment(FeaturedWalkStore.self) private var walkStore
+    @Environment(WalkEventStore.self) private var eventStore
     @State private var selectedWalk: FeaturedWalk?
     @State private var isRefreshing = false
 
     var body: some View {
         NavigationStack {
             Group {
-                if walkStore.walks.isEmpty {
+                if walkStore.walks.isEmpty && eventStore.featuredEvent == nil {
                     emptyState
                 } else {
                     walksList
@@ -22,17 +23,38 @@ struct FeaturedTabView: View {
                 FeaturedWalkDetailSheet(walk: walk)
             }
         }
+        // Opened by the event card below or by the App Store In-App Event's
+        // deep link (woodlandstrailguide://event/newyear2027).
+        .sheet(isPresented: Binding(
+            get: { eventStore.showRequested },
+            set: { eventStore.showRequested = $0 }
+        )) {
+            if let event = eventStore.event {
+                EventWalksSheet(event: event)
+            }
+        }
     }
 
     private var walksList: some View {
-        List(walkStore.walks) { walk in
-            Button {
-                selectedWalk = walk
-            } label: {
-                walkCard(walk)
+        List {
+            if let event = eventStore.featuredEvent {
+                Button {
+                    eventStore.showRequested = true
+                } label: {
+                    EventBannerCard(event: event)
+                }
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
             }
-            .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+            ForEach(walkStore.walks) { walk in
+                Button {
+                    selectedWalk = walk
+                } label: {
+                    FeaturedWalkCard(walk: walk)
+                }
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+            }
         }
         .listStyle(.plain)
         .refreshable {
@@ -58,8 +80,14 @@ struct FeaturedTabView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+}
 
-    private func walkCard(_ walk: FeaturedWalk) -> some View {
+/// One walk row: name, difficulty chip, description, distance/village.
+/// Shared by the Featured tab and the event sheet.
+struct FeaturedWalkCard: View {
+    let walk: FeaturedWalk
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
                 Text(walk.name)
