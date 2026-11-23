@@ -1,0 +1,25 @@
+{
+  "_doc": "In-App Event spec for ~/Neatly/scripts/asc/app_event.py. Times UTC = midnight US Central. In-app window lives in WoodlandsTrailGuide/Resources/EventWalks.json (previewFrom 2026-12-18, Jan 1-31 2027, America/Chicago); deep link handled by WalkEventStore.handle (build 88+, version 2.1.0).",
+  "app_id": "6785576912",
+  "referenceName": "New Year Walks 2027",
+  "badge": "SPECIAL_EVENT",
+  "purpose": "APPROPRIATE_FOR_ALL_USERS",
+  "priority": "HIGH",
+  "purchaseRequirement": "NO_COST_ASSOCIATED",
+  "primaryLocale": "en-US",
+  "deepLink": "woodlandstrailguide://event/newyear2027",
+  "territories": ["USA"],
+  "publishStart": "2026-12-18T06:00:00Z",
+  "eventStart": "2027-01-01T06:00:00Z",
+  "eventEnd": "2027-02-01T06:00:00Z",
+  "localization": {
+    "locale": "en-US",
+    "name": "New Year Walks",
+    "shortDescription": "Four fresh-start routes on Woodlands pathways",
+    "longDescription": "Start 2027 on foot: four curated routes, from a 1-mile Northshore Park stroll to a 7.6-mile loop. Free."
+  },
+  "media": {
+    "EVENT_CARD": "card_1920x1080.png",
+    "EVENT_DETAILS_PAGE": "details_1080x1920.png"
+  }
+}
