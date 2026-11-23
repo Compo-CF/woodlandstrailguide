@@ -10,7 +10,10 @@ OUT = os.path.join(ROOT, "store", "event")
 g = json.load(open(os.path.join(RES, "TrailGraph.json")))
 N, A, W = g["nodes"], g["adj"], g["ways"]
 P = json.load(open(os.path.join(RES, "Polygons.json")))["polygons"]
-EV = json.load(open(os.path.join(RES, "EventWalks.json")))
+EVENT_ID = sys.argv[1] if len(sys.argv) > 1 else "newyear2027"
+EV = next(e for e in json.load(open(os.path.join(RES, "Events.json"), encoding="utf-8"))["events"] if e["id"] == EVENT_ID)
+VAL = EVENT_ID.startswith("sweetheart")
+OUT = os.path.join(OUT, "sweetheart") if VAL else OUT
 
 def snap(c):
     return min(range(len(N)), key=lambda i: (N[i][0]-c[0])**2 + ((N[i][1]-c[1])*0.866)**2)
@@ -37,7 +40,8 @@ def render(Wd, Ht, bbox, out, sky_frac):
     img = Image.new("RGB", (w, h))
     px = img.load()
     # dawn gradient: deep navy top -> plum -> warm gold at the horizon line
-    stops = [(0.0, (10, 18, 40)), (0.45, (38, 34, 78)), (0.75, (150, 70, 80)), (1.0, (246, 170, 92))]
+    stops = ([(0.0, (42, 16, 48)), (0.45, (104, 36, 82)), (0.75, (196, 86, 120)), (1.0, (252, 178, 160))] if VAL else
+             [(0.0, (10, 18, 40)), (0.45, (38, 34, 78)), (0.75, (150, 70, 80)), (1.0, (246, 170, 92))])
     hz = int(h*sky_frac)
     for y in range(h):
         t = min(1, y/hz) if y < hz else 1
@@ -62,7 +66,8 @@ def render(Wd, Ht, bbox, out, sky_frac):
         pts = [P2(N[i]) for i in wy["n"]]
         d.line(pts, fill=(236, 226, 200, 70), width=2*S)
     glow = Image.new("RGBA", img.size, (0, 0, 0, 0)); gd = ImageDraw.Draw(glow)
-    cols = [(255, 205, 96), (255, 150, 84), (255, 226, 150), (246, 120, 90)]
+    cols = ([(255, 120, 150), (255, 182, 196), (246, 92, 120)] if VAL else
+            [(255, 205, 96), (255, 150, 84), (255, 226, 150), (246, 120, 90)])
     for r, c in zip(routes, cols):
         gd.line([P2(p) for p in r], fill=c + (255,), width=14*S, joint="curve")
     glow = glow.filter(ImageFilter.GaussianBlur(10*S))
@@ -85,6 +90,13 @@ def render(Wd, Ht, bbox, out, sky_frac):
         x, y = rnd.uniform(0, w), rnd.uniform(0, hz*0.75); R = rnd.uniform(0.8, 2.2)*S
         d.ellipse([x-R, y-R, x+R, y+R], fill=(255, 248, 230, rnd.randint(90, 220)))
     bursts = [(0.18, 0.30, 70), (0.80, 0.22, 90), (0.55, 0.12, 55)] if Wd > Ht else [(0.25, 0.10, 80), (0.72, 0.07, 95), (0.55, 0.20, 60)]
+    if VAL:
+        for (bx, by, br), c in zip(bursts, [(255, 150, 176), (255, 200, 210), (246, 104, 136)]):
+            cx, cy, R = bx*w, by*h, br*S*0.55
+            pts = [(cx + R*16*math.sin(t)**3/16, cy - R*(13*math.cos(t) - 5*math.cos(2*t) - 2*math.cos(3*t) - math.cos(4*t))/16)
+                   for t in [i*2*math.pi/120 for i in range(120)]]
+            d.polygon(pts, fill=c + (235,))
+        bursts = []
     for (bx, by, br), c in zip(bursts, [(255, 205, 96), (255, 150, 84), (255, 226, 150)]):
         cx, cy, br = bx*w, by*hz/0.35*0.35 if False else by*h, br*S
         for k in range(18):

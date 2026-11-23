@@ -1,0 +1,25 @@
+{
+  "_doc": "In-App Event spec for ~/Neatly/scripts/asc/app_event.py. Times UTC = midnight US Central. In-app window in WoodlandsTrailGuide/Resources/Events.json (id sweetheart2027: previewFrom 2027-01-18, Feb 1-28 2027, America/Chicago); deep link handled by WalkEventStore.handle (build 90+, version 2.1.1).",
+  "app_id": "6785576912",
+  "referenceName": "Sweetheart Strolls 2027",
+  "badge": "SPECIAL_EVENT",
+  "purpose": "APPROPRIATE_FOR_ALL_USERS",
+  "priority": "HIGH",
+  "purchaseRequirement": "NO_COST_ASSOCIATED",
+  "primaryLocale": "en-US",
+  "deepLink": "woodlandstrailguide://event/sweetheart2027",
+  "territories": ["USA"],
+  "publishStart": "2027-01-18T06:00:00Z",
+  "eventStart": "2027-02-01T06:00:00Z",
+  "eventEnd": "2027-03-01T06:00:00Z",
+  "localization": {
+    "locale": "en-US",
+    "name": "Sweetheart Strolls",
+    "shortDescription": "Three easy waterside loops for two",
+    "longDescription": "February's curated walks: three flat 1.75- to 2.1-mile loops past Woodlands ponds and lakes. Free."
+  },
+  "media": {
+    "EVENT_CARD": "card_1920x1080.png",
+    "EVENT_DETAILS_PAGE": "details_1080x1920.png"
+  }
+}
